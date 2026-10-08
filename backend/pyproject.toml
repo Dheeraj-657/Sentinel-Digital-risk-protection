@@ -1,0 +1,32 @@
+[project]
+name = "trustgraph-module2"
+version = "1.0.0"
+description = "TRUSTGRAPH Module 2 - AI Threat Detection & Risk Engine"
+requires-python = ">=3.11"
+dependencies = [
+    "fastapi>=0.115",
+    "uvicorn>=0.30",
+    "pydantic>=2.7",
+    "pydantic-settings>=2.3",
+    "sqlalchemy>=2.0.30",
+    "alembic>=1.13",
+    "httpx>=0.27",
+]
+
+[project.optional-dependencies]
+ml = [
+    "scikit-learn>=1.5",
+    # sentence-transformers is an optional external dependency (multi-GB with torch);
+    # Module 2 runs on deterministic baseline models without it.
+    # "sentence-transformers>=3.0",
+]
+dev = [
+    "pytest>=8.0",
+    "httpx>=0.27",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]
+addopts = "-q"
+filterwarnings = ["ignore::DeprecationWarning"]
