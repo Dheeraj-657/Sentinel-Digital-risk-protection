@@ -133,6 +133,7 @@ export interface ScanQuery {
   level?: RiskLevel;
   q?: string;
   target?: string;
+  brand?: string;
   limit?: number;
   cursor?: string;
 }
@@ -140,6 +141,7 @@ export interface ScanQuery {
 export async function listScans(query: ScanQuery): Promise<{ items: ScanSummary[]; nextCursor: string | null; total: number }> {
   const limit = Math.min(Math.max(query.limit ?? 25, 1), 100);
   const where: Prisma.ScanWhereInput = {
+    ...(query.brand ? { brandId: query.brand } : {}),
     ...(query.type ? { entityType: query.type } : {}),
     ...(query.level ? { riskLevel: query.level } : {}),
     ...(query.target ? { target: query.target } : {}),
@@ -253,4 +255,14 @@ export async function listBrands() {
 export async function getBrand(id: string): Promise<BrandReference | null> {
   const b = await prisma.brand.findUnique({ where: { id } });
   return b ? normalizeBrand(b) : null;
+}
+
+/** Full brand row for the console — BrandReference plus id/isDemo/scanCount
+ * (same shape listBrands returns, for the detail/edit page). */
+export async function getBrandDetail(id: string) {
+  const b = await prisma.brand.findUnique({
+    where: { id },
+    include: { _count: { select: { scans: true } } },
+  });
+  return b ? { ...normalizeBrand(b), id: b.id, isDemo: b.isDemo, scanCount: b._count.scans } : null;
 }
