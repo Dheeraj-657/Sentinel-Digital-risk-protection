@@ -1008,7 +1008,7 @@ git commit -m "feat(m3): entity update, dedup, list filters"
 - Consumes: `brandInputSchema` (module1/src/lib/engine/entity.ts:16-23 — name trimmed min 2 max 80; five list fields accept array or newline/comma string, trimmed, max 20 entries); `normalizeBrand` (entity.ts:291-314 — already implements the exact canonical forms: domains strip scheme/path/`www.` + lowercase, handles strip `@` + lowercase, prefixes/keywords lowercase); `apiError`/`zodToApiError`/`readJson` (module1/src/lib/api.ts); Prisma `Brand` (`name @unique`, `updatedAt @updatedAt` — PATCH auto-bumps, no manual timestamp); `listBrands`'s mapping pattern (scans.ts:248-251). `GET/DELETE /api/scans/[id]` and `GET /api/stats` already exist — untouched.
 - Produces: `GET /api/brands/{id}` → 200 `{id, name, officialDomains, officialHandles, appDevelopers, packagePrefixes, keywords, isDemo, scanCount}` or 404 `NOT_FOUND`; `PATCH /api/brands/{id}` (body = brandInputSchema) → 200 with the same shape, 404, 400 `DEMO_BRAND`, or 409 `BRAND_EXISTS` `{field: "name"}`; `GET /api/scans?brand={id}` filters to that brand's scans; `normalizeBrandInput(b: BrandInput)` shared by POST and PATCH so create/edit can never drift. Tasks 12-13 (BrandFormCard, BrandDetail, Scans page brand filter) consume these.
 
-- [ ] **Step 1: Write the failing check script**
+- [x] **Step 1: Write the failing check script**
 
 Create `module1/scripts/brand-api-check.ts` (relative imports, matching `scripts/engine-check.ts`):
 
@@ -1087,7 +1087,7 @@ console.log(failures ? `\n${failures} check(s) failed` : "\nAll brand-input chec
 process.exit(failures ? 1 : 0);
 ```
 
-- [ ] **Step 2: Run it to verify it fails**
+- [x] **Step 2: Run it to verify it fails**
 
 ```bash
 cd module1 && npx tsx scripts/brand-api-check.ts
@@ -1095,7 +1095,7 @@ cd module1 && npx tsx scripts/brand-api-check.ts
 
 Expected: FAILS — `Cannot find module '../src/lib/brand-input'` (the module doesn't exist yet).
 
-- [ ] **Step 3: Create the shared normalizer**
+- [x] **Step 3: Create the shared normalizer**
 
 Create `module1/src/lib/brand-input.ts`:
 
@@ -1127,7 +1127,7 @@ export function normalizeBrandInput(b: BrandInput) {
 
 (`normalizeBrand` already applies exactly the transformations the POST route inlines today — entity.ts:308-312 vs brands/route.ts:23-27 — so switching POST to this helper is behavior-preserving.)
 
-- [ ] **Step 4: Run the check script to verify it passes**
+- [x] **Step 4: Run the check script to verify it passes**
 
 ```bash
 cd module1 && npx tsx scripts/brand-api-check.ts
@@ -1135,7 +1135,7 @@ cd module1 && npx tsx scripts/brand-api-check.ts
 
 Expected: every line `✔`, exit code 0, `All brand-input checks passed`.
 
-- [ ] **Step 5: Add `getBrandDetail` and the brand filter to `scans.ts`**
+- [x] **Step 5: Add `getBrandDetail` and the brand filter to `scans.ts`**
 
 In `module1/src/lib/scans.ts`, first extend `ScanQuery` (line 131):
 
@@ -1179,7 +1179,7 @@ export async function getBrandDetail(id: string) {
 }
 ```
 
-- [ ] **Step 6: Accept `brand` in the scans list query**
+- [x] **Step 6: Accept `brand` in the scans list query**
 
 In `module1/src/app/api/scans/route.ts`, the listQuery (line 54) gains one field:
 
@@ -1195,7 +1195,7 @@ const listQuery = z.object({
 });
 ```
 
-- [ ] **Step 7: Rewrite the brand routes**
+- [x] **Step 7: Rewrite the brand routes**
 
 Replace the whole of `module1/src/app/api/brands/[id]/route.ts` with:
 
@@ -1277,7 +1277,7 @@ export async function POST(req: Request) {
 }
 ```
 
-- [ ] **Step 8: Register the script and run every M1 check**
+- [x] **Step 8: Register the script and run every M1 check**
 
 In `module1/package.json` scripts, add after `"test:engine"`:
 
@@ -1293,7 +1293,7 @@ cd module1 && npx tsc --noEmit && npm run test:brands && npm run test:engine
 
 Expected: tsc clean (no output); `test:brands` all ✔; `test:engine` all ✔ (existing 12-entity expectations unchanged — nothing in the pipeline was touched).
 
-- [ ] **Step 9: Commit (M1 phase)**
+- [x] **Step 9: Commit (M1 phase)**
 
 ```bash
 git add module1/src/lib/brand-input.ts module1/scripts/brand-api-check.ts module1/src/app/api/brands/route.ts "module1/src/app/api/brands/[id]/route.ts" module1/src/lib/scans.ts module1/src/app/api/scans/route.ts module1/package.json
