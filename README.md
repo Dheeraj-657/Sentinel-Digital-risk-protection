@@ -76,7 +76,7 @@ ff90d917/
 ├── docs/
 │   ├── API.md         API reference for all three modules + risk-scoring output
 │   ├── TESTING.md     Test/build report: exact commands and results
-│   ├── screenshots/    Captured UI walkthrough (8 pages)
+│   ├── screenshots/    Captured UI walkthrough (14 pages)
 │   └── modules/module-2/  Module 2's full engineering doc set (15 files)
 └── README.md
 ```
@@ -258,25 +258,42 @@ Everything below was executed end-to-end through the running UI before submissio
    entity (4 evidence items: text, visual hash, domain intel, behavioral event) scores
    **36/100 MEDIUM, phishing, 71% confidence** against NovaPay — see
    [docs/screenshots/03-threat-detail.png](docs/screenshots/03-threat-detail.png).
+8. **Multi-brand** — create a second/third brand (e.g. Globex Financial) on `/brands`,
+   then run the analysis flow again against it; the threat register mixes verdicts
+   from every protected brand, and each brand's detail page lists its own scans and
+   threats.
+9. **Console scan (Module 1)** — `/scans/new` runs a Sentinel scan from the console;
+   `/scans` lists history with type/level filters, and the scan detail page shows the
+   full report with risk-over-time. The Overview dashboard renders Module 1's
+   server-side stats (scan counts, avg risk/confidence, top signals).
+10. **Registry pages** — `/sources` (source registry + creation form) and
+    `/analysis/history` (job history with status filter and links to jobs/threats).
 
 ## Feature matrix
 
 **Implemented and verified**
-- Unified analyst console: Overview dashboard, Brands (read-only, DNA coverage),
-  Entities (register + attach evidence with inline source creation), Run analysis
+- Unified analyst console: Overview dashboard (live module health **plus Module 1
+  server-side scan stats** — avg risk/confidence, top signals, recent scans), Brands
+  (**create, edit and delete** non-demo brands with full Brand DNA forms; brand detail
+  with Module 2 derived-UUID mapping, brand-scoped scans and threats-against-brand),
+  Entities (register, **edit**, attach evidence with inline source creation,
+  **search + entity-type filter**), Sources (dedicated registry page with full creation
+  form), Scans (**new scan, scan list with type/level filters, scan detail with
+  risk-over-time** — the Sentinel scan experience in the console), Run analysis
   (brand + entity pickers, evidence preview), live job status with polling/timeout/
-  recovery, Threat register (search, status/risk filters, sort), Threat detail
-  (factors, provenance, confidence, explanation, next steps, confirm/dismiss),
-  404 page, responsive nav, loading skeletons, empty states, inline validation,
-  recoverable error states, accessible contrast/labels/roles.
+  recovery, **Analysis history** (job list, status filter, links to jobs and threats),
+  Threat register (search, status/risk filters, sort), Threat detail (factors,
+  provenance, confidence, explanation, next steps, confirm/dismiss), 404 page,
+  responsive nav **with mobile settings panel**, loading skeletons, empty states,
+  inline validation, recoverable error states, accessible contrast/labels/roles.
 - Async analysis jobs (202 + polling), idempotency keys, tenant isolation
   (`X-Tenant-ID`), evidence provenance end-to-end (source → evidence → factor →
   threat), observed vs inferred basis on every factor.
 - Deterministic risk engine: seven weighted factor families, 0–100 score, four risk
   levels, confidence scoring, classification, engine version stamping.
 - Brand DNA registry with derived-UUID bridge from Module 1 cuids.
-- Full test suites: frontend 29/29, Module 2 113/113, Module 3 71/71, Module 1
-  typecheck + engine self-check.
+- Full test suites: frontend 65/65, Module 2 119/119 (113-test floor preserved),
+  Module 3 92/92, Module 1 typecheck + brand-input checks + engine self-check.
 
 **Partially implemented (honest scope)**
 - Relationship graph: factor families and relationship evidence are scored, but the
@@ -317,12 +334,13 @@ Run from each module's directory; full commands and captured output are in
 
 | Suite | Command | Result |
 |---|---|---|
-| Frontend unit tests | `npm run test` | **29/29 passed** (format, API client, brand bridge) |
+| Frontend unit tests | `npm run test` | **65/65 passed** (8 files: format, API client, brand bridge, threat table, sources, scans, history, console workflows) |
 | Frontend types | `npm run typecheck` | clean (TS 5.9 strict) |
 | Frontend build | `npm run build` | ✓ (typecheck + production bundle) |
-| Module 2 risk engine | `python -m pytest` | **113/113 passed** |
-| Module 3 evidence store | `python -m pytest` | **71/71 passed** |
+| Module 2 risk engine | `python -m pytest` | **119/119 passed** (113-test floor preserved) |
+| Module 3 evidence store | `python -m pytest` | **92/92 passed** |
 | Module 1 types | `npm run typecheck` | clean |
+| Module 1 brand API checks | `npm run test:brands` | all checks passed |
 | Module 1 engine self-check | `npm run test:engine` | all checks passed |
 
 ## Known limitations
@@ -343,7 +361,12 @@ Run from each module's directory; full commands and captured output are in
 - [docs/API.md](docs/API.md) — every endpoint (Modules 1/2/3), request/response shapes,
   error semantics, and a field-by-field guide to the risk-scoring output.
 - [docs/TESTING.md](docs/TESTING.md) — exact test/build commands and captured results.
-- [docs/screenshots/](docs/screenshots/) — the eight-page UI walkthrough.
+- [docs/screenshots/](docs/screenshots/) — the 14-page UI walkthrough (overview,
+  threats, threat detail, analysis, entities, brands, scans, sources, history, brand
+  detail).
+- [docs/COMPLETION_REPORT.md](docs/COMPLETION_REPORT.md) — final module-by-module
+  report: audit gaps → delivered features, verification evidence, and remaining
+  limitations.
 - [docs/modules/module-2/](docs/modules/module-2/) — Module 2's engineering doc set
   (architecture, data model, risk engine, ML, events, security, testing, …).
 - [module1/README.md](module1/README.md) — Sentinel DRP: setup, env vars, 3-minute

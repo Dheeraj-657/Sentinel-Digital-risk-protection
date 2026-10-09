@@ -9,12 +9,13 @@ PowerShell, run from the module's directory.
 | # | Suite | Command | Result |
 |---|---|---|---|
 | 1 | Frontend types | `npm run typecheck` | **clean** (TypeScript 5.9, strict) |
-| 2 | Frontend unit tests | `npm run test` | **29/29 passed** |
-| 3 | Frontend production build | `npm run build` | **✓ built in ~1.7 s** |
-| 4 | Module 2 risk engine | `python -m pytest` | **113/113 passed** (0 failures, 0 errors, 0 skipped) |
-| 5 | Module 3 evidence store | `python -m pytest` | **71/71 passed** (0 failures, 0 errors, 0 skipped) |
+| 2 | Frontend unit tests | `npm run test` | **65/65 passed** (8 test files) |
+| 3 | Frontend production build | `npm run build` | **✓ built in ~2.4 s** |
+| 4 | Module 2 risk engine | `python -m pytest` | **119/119 passed** (0 failures, 0 errors, 0 skipped) |
+| 5 | Module 3 evidence store | `python -m pytest` | **92/92 passed** (0 failures, 0 errors, 0 skipped) |
 | 6 | Module 1 types | `npm run typecheck` | **clean** |
-| 7 | Module 1 engine self-check | `npm run test:engine` | **all engine checks passed** |
+| 7 | Module 1 brand API checks | `npm run test:brands` | **all checks passed** |
+| 8 | Module 1 engine self-check | `npm run test:engine` | **all engine checks passed** |
 
 ## Commands and captured output
 
@@ -27,17 +28,22 @@ npm run build       # tsc --noEmit && vite build
 ```
 
 ```
- ✓ src/lib/format.test.ts (9 tests)
- ✓ src/lib/api.test.ts (12 tests)
  ✓ src/lib/brand-bridge.test.ts (8 tests)
+ ✓ src/lib/api.test.ts (25 tests)
+ ✓ src/lib/format.test.ts (9 tests)
+ ✓ src/components/threat-table.test.tsx (1 test)
+ ✓ src/pages/analysis-history.test.tsx (3 tests)
+ ✓ src/pages/sources.test.tsx (5 tests)
+ ✓ src/pages/scan-pages.test.tsx (8 tests)
+ ✓ src/pages/console-workflows.test.tsx (6 tests)
 
- Test Files  3 passed (3)
-      Tests  29 passed (29)
+ Test Files  8 passed (8)
+      Tests  65 passed (65)
 ```
 
-Build output: `dist/assets/index-*.js 340.48 kB │ gzip: 102.85 kB — ✓ built in 1.66s`
-(25 kB CSS, self-hosted variable fonts; no runtime errors in the browser console
-during the E2E walkthrough — only Vite HMR and React DevTools notices).
+Build output: `dist/assets/index-*.js 387.75 kB │ gzip ~122 kB — ✓ built in 2.37s`
+(self-hosted variable fonts; no runtime errors in the browser console during the
+E2E walkthroughs).
 
 ### Module 2 — risk engine (`cd backend`, venv active)
 
@@ -45,17 +51,22 @@ during the E2E walkthrough — only Vite HMR and React DevTools notices).
 python -m pytest
 ```
 
-113 dots, then `113 passed` — verified via JUnit XML for an authoritative count:
+119 progress dots, then `119 passed` — verified via JUnit XML for an authoritative
+count:
 
 ```
-M2 tests=113 failures=0 errors=0 skipped=0
+M2 tests=119 failures=0 errors=0 skipped=0
 ```
 
 Covers: schema validation, scoring math (weights, levels, confidence), job lifecycle
 (queued/running/completed/failed/cancelled), idempotency keys, tenant isolation,
 Module 1/3 HTTP adapters (real FastAPI test doubles over the actual wire contract),
-threat register/status transitions, and API error semantics. pytest emits dependency
-deprecation **warnings** (no failures); counts above exclude none.
+threat register/status transitions, API error semantics, **and the additive
+completion work: the `GET /api/v1/analysis` job-history route (status filter,
+pagination, threat_id resolution) and its service-level tests**. The documented
+floor is **113 passing** — the current run exceeds it (113 preserved + 6 new);
+frozen scoring tests are untouched. pytest emits dependency deprecation **warnings**
+(no failures); counts above exclude none.
 
 ### Module 3 — entity & evidence (`cd module3`, venv active)
 
@@ -64,20 +75,42 @@ python -m pytest
 ```
 
 ```
-M3 tests=71 failures=0 errors=0 skipped=0
+M3 tests=92 failures=0 errors=0 skipped=0
 ```
 
 Covers: normalization on ingest, required-field validation, source-provenance
-enforcement, tenant scoping (cross-tenant = 404), pagination, and
-`test_contract_parity.py` — which validates this service's actual HTTP JSON against
+enforcement, tenant scoping (cross-tenant = 404), pagination,
+`test_contract_parity.py` (validates this service's actual HTTP JSON against
 Module 2's pydantic `EntityReference`/`EvidenceReference` schemas so the wire
-contract cannot drift.
+contract cannot drift), **plus the completion additions: `PATCH
+/api/v1/entities/{id}` partial update semantics (unknown keys 422, immutable
+entity_type, None = unchanged), `entity_type`/`q` list filters, and natural-key
+dedup (`409 DUPLICATE_ENTITY` with `existing_entity_id`)**.
 
 ### Module 1 — Sentinel DRP (`cd module1`)
 
 ```powershell
-npm run typecheck   # tsc --noEmit → clean
+npm run typecheck    # tsc --noEmit → clean
+npm run test:brands  # brand-input + brand-API checks (pure functions)
 npm run test:engine
+```
+
+`test:brands` exercises the brand create/edit input layer (`brandInputSchema` +
+`normalizeBrandInput` + Prisma payload mapping):
+
+```
+✔ name trimmed — "Acme"
+✔ domains canonical — ["acme.com"]
+✔ handles canonical — ["acme_help"]
+✔ developers preserved — ["Acme Ltd"]
+✔ prefixes lowercased — ["com.acme"]
+✔ keywords lowercased — ["acme"]
+✔ no id leakage into prisma data
+✔ multi-line list splits — ["a.com","b.com","c.com"]
+✔ missing name rejected
+✔ 1-char name rejected
+
+All brand-input checks passed
 ```
 
 Engine self-check runs every sample entity through the engine and asserts expected
@@ -95,32 +128,69 @@ All engine checks passed
 
 ## End-to-end verification (through the running UI, not mocks)
 
-Executed 2026-10-09 against the full stack (M1 :3000, M2 :8000, M3 :8001, console
-:5173), demo tenant `11111111-…-5555`:
+### Walkthrough 1 — full analysis flow (2026-10-09)
+
+Executed against the full stack (M1 :3000, M2 :8000, M3 :8001, console :5173), demo
+tenant `11111111-…-5555`:
 
 1. **Health** — all three modules reported healthy through the console's dev proxy
-   (`/api/health`, `/readyz`, `/healthz`); Overview page rendered live module
-   status including honest disclosure ("intel: demo · AI: template only").
+   (`/api/health`, `/readyz`, `/healthz`); Overview page rendered live module status
+   including honest disclosure ("intel: demo · AI: template only").
 2. **Register entity** — `ShopVerse Prize Portal (SYNTHETIC TEST_ONLY)`
    (`9a518a63-c89f-4ca5-83ec-4a9d9a0b5eca`, domain `shopverse-prize-portal.example`,
    handle `shopverse_prizes`) via the UI form → 201 from Module 3.
 3. **Create source + attach evidence** — source `synthetic-console-e2e (SYNTHETIC
-   TEST_ONLY)`; `TEXT_CONTENT` (`80731f6b-…`, prize-scam text) and `DOMAIN_INTEL`
-   (`70cfcd92-…`, `https://shopverse-prize-portal.example/claim`) via the UI form.
-   Verified the evidence timeline and source counts update correctly (including the
-   fix where an inline-created source previously showed as "unknown source").
-4. **Run analysis** — ShopVerse (derived UUID `f453f161-…`) vs the entity; job
-   `647e1966-4fc8-405d-b9f0-b1299b7d4e81` → `COMPLETED` in ~5 s with result
+   TEST_ONLY)`; `TEXT_CONTENT` (prize-scam text) and `DOMAIN_INTEL`
+   (`https://shopverse-prize-portal.example/claim`) via the UI form. Evidence
+   timeline and source counts update correctly.
+4. **Run analysis** — ShopVerse (derived UUID `f4626c30-…`) vs the entity; job
+   `647e1966-4fc8-405d-b9f0-b1299b7d4e81` → `COMPLETED` in ~5 s
    (score **15/100 LOW**, Unclassified, confidence 46%).
-5. **Threat detail** — threat `3c4011c5-…`: factor rows with points/weights/
-   confidence/basis, evidence provenance resolved from Module 3 with real ids,
-   generated explanation, synthetic-data disclosure, suggested next steps.
-6. **Register propagation** — Overview and Threat register both list the new threat
-   (severity mix updated: MEDIUM 1 / LOW 1); filters/sort/search exercised.
+5. **Threat detail** — factor rows with points/weights/confidence/basis, evidence
+   provenance resolved from Module 3 with real ids, generated explanation,
+   synthetic-data disclosure, suggested next steps.
+6. **Register propagation** — Overview and Threat register both list the new threat;
+   filters/sort/search exercised.
 7. **Network/console hygiene** — all browser requests returned 200/304; console
    showed no errors.
 
-A second, richer fixture — **NovaPay Support (SYNTHETIC TEST_ONLY)** with four
+### Walkthrough 2 — completion features, multi-brand (2026-10-10)
+
+Same stack, same tenant, every step through the console UI:
+
+1. **Brand CRUD** — created **Globex Financial** and **Initech Systems** via the
+   Brands page form (Brand DNA: domains, handles, developers, prefixes, keywords);
+   edited a non-demo brand's DNA through the edit form and verified the round-trip
+   (values persisted after reload); demo brands correctly refuse edit/delete
+   (`DEMO_BRAND`).
+2. **Console scan** — ran a Sentinel scan from the console's new **New scan** page
+   against the Initech brand; **Scans** list shows the scan, the risk-level filter
+   works (Critical filter → 4 rows; Clear resets), and the scan detail page renders
+   the full report with risk-over-time history. The Initech scan
+   (`cmv1i4chd0002bkk6uvcpuxsl`) scores **30/100 LOW** vs brand Initech Systems.
+3. **Entity edit** — edited an entity's display name and identifiers through the
+   entity detail form (PATCH round-trip verified); entity list search + type filter
+   exercised.
+4. **Multi-brand analysis** — ran analysis jobs for both new brands: Globex job
+   `d5cbdb7a-…` and Initech job `4a214855-…`, both `COMPLETED`; threats
+   `a9fb1818-…` (21/100 LOW, Globex) and `9dfedae1-…` (23/100 LOW, Initech) appear
+   in the register alongside the NovaPay fixture (36/100 MEDIUM, Phishing).
+5. **Analysis history** — the new `/analysis/history` page lists all 7 jobs with the
+   status filter and links to each job/threat.
+6. **Dashboard stats** — Overview now renders Module 1 `/api/stats` server-side
+   numbers (SCANS 15, avg risk 42 · avg confidence 84, top signal
+   `MULTIPLE_IMPERSONATION_INDICATORS 7×`) plus live threat/entity/brand counts and
+   the severity mix (MEDIUM 1 / LOW 4), with canonical classification labels in the
+   recent-activity tables (fix verified in commit `406faa8`).
+7. **Sources page** — dedicated `/sources` page lists all 5 sources (including this
+   walkthrough's `globex-e2e-intel` and `initech-e2e-intel`) with the full creation
+   form (free-text kind, replacing the old hardcoded `"fixture"`).
+8. **Brand detail** — the brand detail page shows live counts (THREATS 1 / OPEN 1 /
+   SCANS IN SENTINEL 1), the Module 2 mapping with the derived UUID, brand-scoped
+   scans, and threats-against-brand tables.
+9. **Network/console hygiene** — no console errors during the walkthrough.
+
+The richer seeded fixture — **NovaPay Support (SYNTHETIC TEST_ONLY)** with four
 evidence types — scores **36/100 MEDIUM, PHISHING, 71% confidence** against NovaPay
 and is the flagship screenshot: [screenshots/03-threat-detail.png](screenshots/03-threat-detail.png).
 
@@ -131,6 +201,7 @@ and is the flagship screenshot: [screenshots/03-threat-detail.png](screenshots/0
   (`--junitxml=<file>`) is authoritative (use a project-relative path; Windows Python
   cannot read `/tmp`).
 - Module 2's suite intentionally includes tests that pin the frozen scoring contract;
-  the documented floor is **113 passing** — the current run meets it exactly.
+  the documented floor is **113 passing** — the current run exceeds it at 119 with
+  all 113 preserved.
 - Databases are disposable: delete a module's `.db` file and re-run its migration/setup
   step to reset state (all fixtures are clearly labelled `SYNTHETIC TEST_ONLY`).

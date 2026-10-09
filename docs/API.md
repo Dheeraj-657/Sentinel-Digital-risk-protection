@@ -70,6 +70,38 @@ recovery.
 > example above, 2 distinct items produced 3 citations. The UI labels this explicitly;
 > use the threat's `evidence_references` for distinct items.
 
+### `GET /api/v1/analysis` — analysis job history
+
+Query: `status` (`QUEUED|RUNNING|COMPLETED|FAILED|CANCELLED`, optional), `limit`
+(1–200, default 50), `offset`. Newest first. Returns `{items, total, limit, offset}`,
+where each item is a compact job summary (job_id, status, brand_id, entity_id,
+created/started/completed timestamps, error_code, and — for completed jobs — the
+`threat_id` the run produced, resolved from its latest `AnalysisResult`):
+
+```json
+{
+  "items": [
+    {
+      "job_id": "4a214855-635f-4669-ba29-c67ca0caa9b6",
+      "status": "COMPLETED",
+      "brand_id": "b29b68f9-bb55-5d15-9883-ac36fbc3f57b",
+      "entity_id": "1f6768c8-ecb0-4a53-8c29-87c1f2993f32",
+      "created_at": "2026-10-09T21:51:41.508419Z",
+      "started_at": "2026-10-09T21:51:41.517810Z",
+      "completed_at": "2026-10-09T21:51:46.442270Z",
+      "error_code": null,
+      "threat_id": "9dfedae1-fc7b-4b29-b02d-37a235b82cf5"
+    }
+  ],
+  "total": 7,
+  "limit": 2,
+  "offset": 0
+}
+```
+
+This is a thin read-only route over the existing `JobService.list_for_tenant` — no
+engine or job-state logic is touched. The console's Analysis history page uses it.
+
 ### `GET /api/v1/threats` — threat register
 
 Query: `status` (`OPEN|CONFIRMED|DISMISSED`), `risk_level`
@@ -139,9 +171,30 @@ verdict, and history lives in the analysis jobs/results.
 
 ### Entities
 
-- `GET /api/v1/entities?limit=&offset=` → `{items, total, limit, offset}`
+- `GET /api/v1/entities?entity_type=&q=&limit=&offset=` → `{items, total, limit,
+  offset}`, newest first. `entity_type` filters on the enum below; `q` (≤200 chars) is
+  a case-insensitive substring match against `display_name` and the `domain` /
+  `handle` identifiers.
 - `GET /api/v1/entities/{entity_id}` → entity (identifiers/attributes are string maps)
 - `POST /api/v1/entities` — body `{"entity_type": "WEBSITE|SOCIAL_PROFILE|DOMAIN|MOBILE_APP|MESSAGING_ACCOUNT|OTHER", "display_name": "...", "identifiers": {"domain": "...", "handle": "..."}}`. Identifiers are normalized (trim + lowercase) at ingest.
+
+  **Deduplication.** Reusing an exact `entity_id` → `409 DUPLICATE_ENTITY` with
+  `details.entity_id`. Registering the same `domain` for the same tenant *and* entity
+  type under a different id → `409 DUPLICATE_ENTITY` with
+  `details.existing_entity_id` pointing at the entity that already owns the domain:
+
+  ```json
+  {
+    "error_code": "DUPLICATE_ENTITY",
+    "message": "An entity with domain 'novapay-support.example' already exists for this tenant and type.",
+    "details": {"existing_entity_id": "161a6131-cad9-4b08-9c8a-917686d2a671"}
+  }
+  ```
+
+- `PATCH /api/v1/entities/{entity_id}` — partial update: `display_name` (1–300 chars,
+  stripped), `identifiers` (re-normalized on write), `attributes`. Omitted / `null`
+  fields are left unchanged; unknown keys and `entity_type` → `422` (the type is
+  immutable). Returns the updated entity list item.
 
 ### Evidence
 
@@ -185,9 +238,12 @@ verdict, and history lives in the analysis jobs/results.
 
 ## Module 1 — Sentinel DRP (:3000)
 
-Only consumed (read-only) by the TRUSTGRAPH console; Module 1 has its own full UI at
-`http://localhost:3000` (scan experience, pipeline stages, Groq AI assessment — see
-`module1/README.md`).
+Consumed by the TRUSTGRAPH console for brand intelligence and the Sentinel scan
+experience; Module 1 also has its own full UI at `http://localhost:3000` (scan
+experience, pipeline stages, Groq AI assessment — see `module1/README.md`). Module 1
+has no tenancy model — these routes are unauthenticated in local dev.
+
+### Brands
 
 - `GET /api/brands` → protected brands with their **Brand DNA**:
 
@@ -195,7 +251,7 @@ Only consumed (read-only) by the TRUSTGRAPH console; Module 1 has its own full U
 {
   "items": [
     {
-      "id": "cmv19i3fz0000l4k68wq1z3bv",
+      "id": "cmv1bm2y30000gsk6z25z7wop",
       "name": "NovaPay",
       "officialDomains": ["novapay.com", "novapay.app"],
       "officialHandles": ["novapay", "novapaysupport"],
@@ -209,6 +265,36 @@ Only consumed (read-only) by the TRUSTGRAPH console; Module 1 has its own full U
 }
 ```
 
+- `POST /api/brands` — create a brand. Body is the Brand DNA fields (`name` 2–80
+  chars; list fields ≤20 entries each); input is normalized (domains/handles stripped
+  of scheme, path, `www.`, `@`; lowercased). `409 BRAND_EXISTS` on a duplicate name.
+- `GET /api/brands/{id}` → single brand (the console's brand detail page).
+- `PATCH /api/brands/{id}` — edit Brand DNA. Same schema/normalization as create;
+  omitted fields are unchanged. `404 NOT_FOUND` for unknown ids, `400 DEMO_BRAND` for
+  seeded demo brands (demo brands are read-only).
+- `DELETE /api/brands/{id}` — delete a brand; its scans have `brandId` set to null
+  (history is preserved). `404 NOT_FOUND`, `400 DEMO_BRAND`.
+
+### Scans
+
+- `POST /api/scans` — run a Sentinel scan and store the report. Body:
+  `{"entityType": "PROFILE|WEBSITE|DOMAIN|APP", "input": "...", "brandId": "..." or
+  "brand": {...}, "claimedDeveloper": "..."}` (input 3–2048 chars; rate-limited to 12
+  scans/min per client IP → `429 RATE_LIMITED` with `retryAfterSec`). Returns **201**
+  with the full `AnalysisReport` plus its `id`.
+- `GET /api/scans?type=&level=&q=&target=&brand=&limit=&cursor=` → scan history,
+  `{items, nextCursor, total}`. `type` (`PROFILE|WEBSITE|DOMAIN|APP`), `level`
+  (`VERY_LOW|LOW|MEDIUM|HIGH|CRITICAL`), `q` (≤200), `target` (≤300), `brand` (cuid —
+  brand-scoped history for the brand detail page), `limit` 1–100, opaque `cursor`.
+- `GET /api/scans/{id}` → `{report, history}` — the full report plus up to 12 earlier
+  scans of the same target for risk-over-time.
+- `DELETE /api/scans/{id}` → 204.
+
+### Stats & health
+
+- `GET /api/stats` → aggregate scan statistics (`total`, `levels`, `byType`,
+  `avgRisk`, `avgConfidence`, `recentHigh`, `recent`, `topSignals`). The console
+  dashboard renders these server-side numbers directly.
 - `GET /api/health` → `{status, database, intelMode, ai: {provider, configured, model}, providers}` —
   the console surfaces this honestly on the Overview page (e.g. "intel: demo · AI:
   template only" when `GROQ_API_KEY` is unset).
@@ -217,14 +303,20 @@ Only consumed (read-only) by the TRUSTGRAPH console; Module 1 has its own full U
 
 ## Brand UUID bridge
 
-Module 1 ids are cuids (`cmv19i3fz…`); Module 2 references brands by UUID. The console
+Module 1 ids are cuids (`cmv1bm2y3…`); Module 2 references brands by UUID. The console
 derives the stable bridge id with `uuidv5(SENTINEL_BRAND_NAMESPACE, cuid)`
-(`frontend/src/lib/brand-bridge.ts`, unit-tested):
+(`frontend/src/lib/brand-bridge.ts`, unit-tested), where
+`SENTINEL_BRAND_NAMESPACE = uuidv5(NAMESPACE_DNS, "trustgraph.module1.sentinel")`:
 
 | Module 1 brand | cuid | Module 2 `brand_id` |
 |---|---|---|
-| NovaPay | `cmv19i3fz0000l4k68wq1z3bv` | `6dc4fadf-baaa-5ef7-8d67-8c9fa58786bb` |
-| ShopVerse | `cmv19i3g80001l4k6x0xeumyv` | `f453f161-00f9-581d-a4ff-7e3e6095332a` |
+| NovaPay (demo) | `cmv1bm2y30000gsk6z25z7wop` | `86307798-36b3-57f3-afa5-cc8150169a59` |
+| ShopVerse (demo) | `cmv1bm2ye0001gsk6o51p946h` | `f4626c30-f514-594d-9a55-e00a9b7837b0` |
+| Globex Financial | `cmv1hrjyt0000bkk601u9bcar` | `27fef6b2-f573-566d-8e37-dfa7d0bb7369` |
+| Initech Systems | `cmv1hs5zi0001bkk6bg0u2jf5` | `b29b68f9-bb55-5d15-9883-ac36fbc3f57b` |
+
+(cuids shown are from the current seeded database — the bridge is computed from
+whatever brands exist, so newly created brands map the same way.)
 
 ## Risk-scoring output, explained field by field
 
@@ -243,7 +335,9 @@ families 0–100, multiplies by the family weight, and sums the contributions in
 | `RELATIONSHIP_SIGNALS` | 0.10 | links to other flagged entities |
 
 - **`risk_level`** — `LOW ≤ 25 < MEDIUM ≤ 50 < HIGH ≤ 75 < CRITICAL`.
-- **`classification`** — e.g. `PHISHING`, `IMPERSONATION`, `UNKNOWN` (no match).
+- **`classification`** — `PHISHING`, `BRAND_IMPERSONATION`, `SUSPICIOUS_DOMAIN`, or
+  `UNKNOWN` (no match). Priority: PHISHING → BRAND_IMPERSONATION → SUSPICIOUS_DOMAIN →
+  UNKNOWN.
 - **`confidence`** (0–1) — evidence quality/coverage for the verdict; factors carry
   their own confidence and the engine combines them.
 - **`basis`** (per factor) — `OBSERVED` (measured directly from evidence),
