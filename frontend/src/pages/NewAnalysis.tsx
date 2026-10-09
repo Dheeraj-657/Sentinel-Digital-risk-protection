@@ -15,6 +15,7 @@ import {
   ErrorState,
   PageHeader,
 } from "../components/ui";
+import { useToast } from "../components/toast";
 
 const inputClass =
   "w-full rounded border border-line bg-ink px-2.5 py-1.5 text-sm text-fg focus:border-action/60 focus:outline-none";
@@ -22,6 +23,7 @@ const inputClass =
 export function NewAnalysis() {
   const { tenant } = useTenant();
   const navigate = useNavigate();
+  const { push } = useToast();
   const [searchParams] = useSearchParams();
 
   const brands = useApi(() => m1.listBrands(), []);
@@ -68,6 +70,7 @@ export function NewAnalysis() {
         resolvedEntityId,
         tenant,
       );
+      push("success", `Analysis queued — job ${job.job_id}.`);
       navigate(`/analysis/${job.job_id}`);
     } catch (err) {
       setError(errorMessage(err));

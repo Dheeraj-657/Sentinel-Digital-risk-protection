@@ -1,6 +1,7 @@
 import { BrowserRouter, Route, Routes } from "react-router-dom";
 import { TenantProvider } from "./lib/tenant";
 import { AppShell } from "./components/layout";
+import { ToastProvider } from "./components/toast";
 import Dashboard from "./pages/Dashboard";
 import { Brands } from "./pages/Brands";
 import { BrandDetail } from "./pages/BrandDetail";
@@ -20,27 +21,29 @@ import { NotFound } from "./pages/NotFound";
 export default function App() {
   return (
     <TenantProvider>
-      <BrowserRouter>
-        <AppShell>
-          <Routes>
-            <Route path="/" element={<Dashboard />} />
-            <Route path="/brands" element={<Brands />} />
-            <Route path="/brands/:brandId" element={<BrandDetail />} />
-            <Route path="/threats" element={<Threats />} />
-            <Route path="/threats/:threatId" element={<ThreatDetail />} />
-            <Route path="/entities" element={<Entities />} />
-            <Route path="/entities/:entityId" element={<EntityDetail />} />
-            <Route path="/analysis/new" element={<NewAnalysis />} />
-            <Route path="/analysis/history" element={<AnalysisHistory />} />
-            <Route path="/analysis/:jobId" element={<AnalysisJob />} />
-            <Route path="/scan/new" element={<ScanNew />} />
-            <Route path="/scans" element={<Scans />} />
-            <Route path="/scans/:scanId" element={<ScanDetail />} />
-            <Route path="/sources" element={<Sources />} />
-            <Route path="*" element={<NotFound />} />
-          </Routes>
-        </AppShell>
-      </BrowserRouter>
+      <ToastProvider>
+        <BrowserRouter>
+          <AppShell>
+            <Routes>
+              <Route path="/" element={<Dashboard />} />
+              <Route path="/brands" element={<Brands />} />
+              <Route path="/brands/:brandId" element={<BrandDetail />} />
+              <Route path="/threats" element={<Threats />} />
+              <Route path="/threats/:threatId" element={<ThreatDetail />} />
+              <Route path="/entities" element={<Entities />} />
+              <Route path="/entities/:entityId" element={<EntityDetail />} />
+              <Route path="/analysis/new" element={<NewAnalysis />} />
+              <Route path="/analysis/history" element={<AnalysisHistory />} />
+              <Route path="/analysis/:jobId" element={<AnalysisJob />} />
+              <Route path="/scan/new" element={<ScanNew />} />
+              <Route path="/scans" element={<Scans />} />
+              <Route path="/scans/:scanId" element={<ScanDetail />} />
+              <Route path="/sources" element={<Sources />} />
+              <Route path="*" element={<NotFound />} />
+            </Routes>
+          </AppShell>
+        </BrowserRouter>
+      </ToastProvider>
     </TenantProvider>
   );
 }

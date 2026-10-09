@@ -1,10 +1,20 @@
 import { Link } from "react-router-dom";
-import { Card, CardHeader, EmptyState, ErrorState, M1RiskLevelBadge, PageHeader, StatCard, TableSkeleton } from "../components/ui";
+import {
+  Button,
+  Card,
+  CardHeader,
+  EmptyState,
+  ErrorState,
+  M1RiskLevelBadge,
+  PageHeader,
+  StatCard,
+  TableSkeleton,
+} from "../components/ui";
 import { ThreatTable } from "../components/threat-table";
 import { m1, m2, m3 } from "../lib/api";
 import { useApi, useEnrichment } from "../lib/hooks";
 import { useTenant } from "../lib/tenant";
-import { formatDateTime } from "../lib/format";
+import { cx, formatDateTime, RISK_LEVEL_BAR } from "../lib/format";
 import type { M1Health } from "../lib/types";
 
 export default function Dashboard() {
@@ -36,20 +46,51 @@ export default function Dashboard() {
       <PageHeader
         title="Overview"
         description="Live aggregates from the Module 2 risk engine, Module 3 evidence store and Module 1 brand registry."
+        actions={
+          <div className="flex flex-wrap items-center gap-2">
+            <Link to="/analysis/new">
+              <Button variant="primary">Run analysis</Button>
+            </Link>
+            <Link to="/scan/new">
+              <Button>New scan</Button>
+            </Link>
+            <Link to="/entities">
+              <Button>Register entity</Button>
+            </Link>
+          </div>
+        }
       />
 
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
-        <StatCard label="Threats" value={threats.data?.total ?? "—"} hint="risk engine output" />
-        <StatCard label="Open" value={threats.loading ? "…" : open} hint="awaiting triage" tone="medium" />
+        <StatCard
+          label="Threats"
+          value={threats.data?.total ?? "—"}
+          hint="risk engine output"
+          to="/threats"
+        />
+        <StatCard
+          label="Open"
+          value={threats.loading ? "…" : open}
+          hint="awaiting triage"
+          tone="medium"
+          to="/threats?status=OPEN"
+        />
         <StatCard
           label="High + critical"
           value={threats.loading ? "…" : severe}
           hint="risk level"
           tone={severe > 0 ? "critical" : "low"}
+          to="/threats"
         />
-        <StatCard label="Confirmed" value={threats.loading ? "…" : confirmed} hint="triaged by analyst" tone="low" />
-        <StatCard label="Entities" value={entities.data?.total ?? "—"} hint="evidence store" />
-        <StatCard label="Scans" value={stats.data?.total ?? "—"} hint="Sentinel engine" />
+        <StatCard
+          label="Confirmed"
+          value={threats.loading ? "…" : confirmed}
+          hint="triaged by analyst"
+          tone="low"
+          to="/threats?status=CONFIRMED"
+        />
+        <StatCard label="Entities" value={entities.data?.total ?? "—"} hint="evidence store" to="/entities" />
+        <StatCard label="Scans" value={stats.data?.total ?? "—"} hint="Sentinel engine" to="/scans" />
       </div>
 
       <div className="mt-4 grid gap-4 lg:grid-cols-3">
@@ -60,18 +101,23 @@ export default function Dashboard() {
           />
           <div className="space-y-3 px-4 py-4 sm:px-5">
             {(["CRITICAL", "HIGH", "MEDIUM", "LOW"] as const).map((level) => (
-              <div key={level} className="flex items-center gap-3">
+              <Link
+                key={level}
+                to={`/threats?level=${level}`}
+                className="flex items-center gap-3 rounded-sm transition hover:opacity-80 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-action"
+                aria-label={`Filter threats by ${level.toLowerCase()} risk level`}
+              >
                 <span className="w-16 text-[11px] font-semibold uppercase tracking-widest text-muted">
                   {level}
                 </span>
                 <div className="h-2 flex-1 overflow-hidden rounded bg-raised">
                   <div
-                    className={`h-full rounded bg-risk-${level.toLowerCase()}`}
+                    className={cx("h-full rounded", RISK_LEVEL_BAR[level])}
                     style={{ width: `${(byLevel[level] / levelMax) * 100}%` }}
                   />
                 </div>
                 <span className="w-8 text-right font-mono text-xs text-fg">{byLevel[level]}</span>
-              </div>
+              </Link>
             ))}
           </div>
         </Card>

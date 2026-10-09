@@ -3,6 +3,7 @@ import { Link, useParams } from "react-router-dom";
 import { useApi, useEnrichment, errorMessage } from "../lib/hooks";
 import { m2, m3 } from "../lib/api";
 import { useTenant } from "../lib/tenant";
+import { useToast } from "../components/toast";
 import {
   Badge,
   Button,
@@ -37,9 +38,11 @@ const STATUS_ACTION_TONE: Record<string, "low" | "medium" | "neutral"> = {
 export function ThreatDetail() {
   const { threatId = "" } = useParams();
   const { tenant } = useTenant();
+  const { push } = useToast();
   const threat = useApi(() => m2.getThreat(threatId, tenant), [tenant, threatId]);
   const [patching, setPatching] = useState(false);
   const [patchError, setPatchError] = useState<string | null>(null);
+  const [pendingStatus, setPendingStatus] = useState<"CONFIRMED" | "DISMISSED" | null>(null);
 
   if (threat.loading) {
     return (
@@ -74,9 +77,12 @@ export function ThreatDetail() {
     setPatchError(null);
     try {
       await m2.updateThreatStatus(threatId, status, tenant);
+      setPendingStatus(null);
+      push("success", `Threat marked ${status.toLowerCase()} — register updated.`);
       threat.reload();
     } catch (err) {
       setPatchError(errorMessage(err));
+      push("error", `Could not mark threat ${status.toLowerCase()}: ${errorMessage(err)}`);
     } finally {
       setPatching(false);
     }
@@ -144,14 +150,38 @@ export function ThreatDetail() {
             Response
           </span>
           {data.status === "OPEN" ? (
-            <>
-              <Button variant="primary" disabled={patching} onClick={() => patchStatus("CONFIRMED")}>
-                {patching ? "Confirming…" : "Confirm threat"}
-              </Button>
-              <Button variant="danger" disabled={patching} onClick={() => patchStatus("DISMISSED")}>
-                Dismiss
-              </Button>
-            </>
+            pendingStatus === null ? (
+              <>
+                <Button variant="primary" disabled={patching} onClick={() => setPendingStatus("CONFIRMED")}>
+                  Confirm threat
+                </Button>
+                <Button variant="danger" disabled={patching} onClick={() => setPendingStatus("DISMISSED")}>
+                  Dismiss
+                </Button>
+              </>
+            ) : (
+              <>
+                <span className="text-xs text-fg">
+                  {pendingStatus === "CONFIRMED"
+                    ? "Mark this threat as confirmed?"
+                    : "Dismiss this threat?"}
+                </span>
+                <Button
+                  variant={pendingStatus === "CONFIRMED" ? "primary" : "danger"}
+                  disabled={patching}
+                  onClick={() => patchStatus(pendingStatus)}
+                >
+                  {patching
+                    ? "Saving…"
+                    : pendingStatus === "CONFIRMED"
+                      ? "Yes, confirm"
+                      : "Yes, dismiss"}
+                </Button>
+                <Button disabled={patching} onClick={() => setPendingStatus(null)}>
+                  Cancel
+                </Button>
+              </>
+            )
           ) : (
             <Button disabled={patching} onClick={() => patchStatus("OPEN")}>
               {patching ? "Reopening…" : "Reopen"}

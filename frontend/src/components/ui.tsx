@@ -1,3 +1,4 @@
+import { Link } from "react-router-dom";
 import {
   cx,
   M1_RISK_LEVEL_BAR,
@@ -343,11 +344,14 @@ export function StatCard({
   value,
   hint,
   tone = "neutral",
+  to,
 }: {
   label: string;
   value: React.ReactNode;
   hint?: string;
   tone?: "neutral" | "low" | "medium" | "high" | "critical";
+  /** Route to navigate to when the card is clicked. */
+  to?: string;
 }) {
   const valueClass: Record<string, string> = {
     neutral: "text-fg",
@@ -356,15 +360,31 @@ export function StatCard({
     high: "text-risk-high",
     critical: "text-risk-critical",
   };
-  return (
-    <Card className="px-4 py-3.5">
+  const body = (
+    <>
       <p className="text-[11px] font-medium uppercase tracking-widest text-faint">{label}</p>
-      <p className={cx("mt-1.5 font-condensed font-mono text-3xl font-bold leading-none", valueClass[tone])}>
+      <p
+        className={cx(
+          "mt-1.5 font-condensed font-mono text-3xl font-bold leading-none",
+          valueClass[tone],
+        )}
+      >
         {value}
       </p>
       {hint ? <p className="mt-1.5 text-[11px] text-muted">{hint}</p> : null}
-    </Card>
+    </>
   );
+  if (to) {
+    return (
+      <Link
+        to={to}
+        className="block rounded-md border border-line-soft bg-panel px-4 py-3.5 transition hover:border-action/60 hover:bg-raised/40 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-action"
+      >
+        {body}
+      </Link>
+    );
+  }
+  return <Card className="px-4 py-3.5">{body}</Card>;
 }
 
 export function KeyValue({

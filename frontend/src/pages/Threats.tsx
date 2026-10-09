@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 import { useApi } from "../lib/hooks";
 import { m2 } from "../lib/api";
 import { useTenant } from "../lib/tenant";
@@ -27,13 +27,37 @@ const LEVEL_OPTIONS: Array<{ value: RiskLevel | ""; label: string }> = [
 
 type SortKey = "risk" | "recent";
 
+/** Filters live in the URL so back-navigation from a threat detail page
+ * restores the exact filtered view the analyst came from. */
 export function Threats() {
   const { tenant } = useTenant();
-  const [status, setStatus] = useState<ThreatStatus | "">("");
-  const [riskLevel, setRiskLevel] = useState<RiskLevel | "">("");
-  const [search, setSearch] = useState("");
-  const [sort, setSort] = useState<SortKey>("risk");
+  const [searchParams, setSearchParams] = useSearchParams();
   const [page, setPage] = useState(0);
+
+  const statusParam = searchParams.get("status");
+  const status: ThreatStatus | "" = STATUS_OPTIONS.some(
+    (option) => option.value !== "" && option.value === statusParam,
+  )
+    ? (statusParam as ThreatStatus)
+    : "";
+  const levelParam = searchParams.get("level");
+  const riskLevel: RiskLevel | "" = LEVEL_OPTIONS.some(
+    (option) => option.value !== "" && option.value === levelParam,
+  )
+    ? (levelParam as RiskLevel)
+    : "";
+  const search = searchParams.get("q") ?? "";
+  const sort: SortKey = searchParams.get("sort") === "recent" ? "recent" : "risk";
+
+  const applyParams = (updates: Record<string, string | null>, resetPage = true) => {
+    const next = new URLSearchParams(searchParams);
+    for (const [key, value] of Object.entries(updates)) {
+      if (value) next.set(key, value);
+      else next.delete(key);
+    }
+    setSearchParams(next, { replace: true });
+    if (resetPage) setPage(0);
+  };
 
   const threats = useApi(
     () =>
@@ -70,11 +94,6 @@ export function Threats() {
   const safePage = Math.min(page, pageCount - 1);
   const pageItems = filtered.slice(safePage * PAGE_SIZE, safePage * PAGE_SIZE + PAGE_SIZE);
 
-  const resetFilters = () => {
-    setStatus("");
-    setRiskLevel("");
-    setSearch("");
-  };
   const hasFilters = status !== "" || riskLevel !== "" || search.trim() !== "";
 
   return (
@@ -106,10 +125,7 @@ export function Threats() {
                 id="threat-search"
                 type="search"
                 value={search}
-                onChange={(event) => {
-                  setSearch(event.target.value);
-                  setPage(0);
-                }}
+                onChange={(event) => applyParams({ q: event.target.value || null })}
                 placeholder="Search ID, classification…"
                 spellCheck={false}
                 className="w-52 rounded border border-line bg-ink px-2.5 py-1.5 text-xs text-fg placeholder:text-faint focus:border-action/60 focus:outline-none"
@@ -117,10 +133,7 @@ export function Threats() {
               <select
                 aria-label="Filter by status"
                 value={status}
-                onChange={(event) => {
-                  setStatus(event.target.value as ThreatStatus | "");
-                  setPage(0);
-                }}
+                onChange={(event) => applyParams({ status: event.target.value || null })}
                 className="rounded border border-line bg-ink px-2 py-1.5 text-xs text-fg focus:border-action/60 focus:outline-none"
               >
                 {STATUS_OPTIONS.map((option) => (
@@ -132,10 +145,7 @@ export function Threats() {
               <select
                 aria-label="Filter by risk level"
                 value={riskLevel}
-                onChange={(event) => {
-                  setRiskLevel(event.target.value as RiskLevel | "");
-                  setPage(0);
-                }}
+                onChange={(event) => applyParams({ level: event.target.value || null })}
                 className="rounded border border-line bg-ink px-2 py-1.5 text-xs text-fg focus:border-action/60 focus:outline-none"
               >
                 {LEVEL_OPTIONS.map((option) => (
@@ -145,7 +155,10 @@ export function Threats() {
                 ))}
               </select>
               {hasFilters ? (
-                <Button variant="ghost" onClick={resetFilters}>
+                <Button
+                  variant="ghost"
+                  onClick={() => applyParams({ status: null, level: null, q: null })}
+                >
                   Clear
                 </Button>
               ) : null}
@@ -167,7 +180,9 @@ export function Threats() {
             }
             action={
               hasFilters ? (
-                <Button onClick={resetFilters}>Clear filters</Button>
+                <Button onClick={() => applyParams({ status: null, level: null, q: null })}>
+                  Clear filters
+                </Button>
               ) : (
                 <Link to="/analysis/new">
                   <Button variant="primary">Run analysis</Button>
@@ -184,7 +199,9 @@ export function Threats() {
                 <select
                   aria-label="Sort threats"
                   value={sort}
-                  onChange={(event) => setSort(event.target.value as SortKey)}
+                  onChange={(event) =>
+                    applyParams({ sort: event.target.value === "risk" ? null : event.target.value }, false)
+                  }
                   className="rounded border border-line bg-ink px-2 py-1 text-xs text-fg focus:border-action/60 focus:outline-none"
                 >
                   <option value="risk">Highest risk</option>
