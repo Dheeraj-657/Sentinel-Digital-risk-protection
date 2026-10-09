@@ -1,0 +1,36 @@
+import { BrowserRouter, Route, Routes } from "react-router-dom";
+import { TenantProvider } from "./lib/tenant";
+import { AppShell } from "./components/layout";
+import Dashboard from "./pages/Dashboard";
+import { Brands } from "./pages/Brands";
+import { BrandDetail } from "./pages/BrandDetail";
+import { Threats } from "./pages/Threats";
+import { ThreatDetail } from "./pages/ThreatDetail";
+import { Entities } from "./pages/Entities";
+import { EntityDetail } from "./pages/EntityDetail";
+import { NewAnalysis } from "./pages/NewAnalysis";
+import { AnalysisJob } from "./pages/AnalysisJob";
+import { NotFound } from "./pages/NotFound";
+
+export default function App() {
+  return (
+    <TenantProvider>
+      <BrowserRouter>
+        <AppShell>
+          <Routes>
+            <Route path="/" element={<Dashboard />} />
+            <Route path="/brands" element={<Brands />} />
+            <Route path="/brands/:brandId" element={<BrandDetail />} />
+            <Route path="/threats" element={<Threats />} />
+            <Route path="/threats/:threatId" element={<ThreatDetail />} />
+            <Route path="/entities" element={<Entities />} />
+            <Route path="/entities/:entityId" element={<EntityDetail />} />
+            <Route path="/analysis/new" element={<NewAnalysis />} />
+            <Route path="/analysis/:jobId" element={<AnalysisJob />} />
+            <Route path="*" element={<NotFound />} />
+          </Routes>
+        </AppShell>
+      </BrowserRouter>
+    </TenantProvider>
+  );
+}

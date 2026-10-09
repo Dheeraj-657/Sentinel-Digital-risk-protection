@@ -1,0 +1,81 @@
+// AI Threat Intelligence & Risk Engine — data model
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "sqlite"
+}
+
+/// A protected brand (or person) that entities are compared against.
+model Brand {
+  id               String   @id @default(cuid())
+  name             String   @unique
+  /// Official domains, e.g. ["acmebank.com"]
+  officialDomains  Json
+  /// Official social handles, e.g. ["acmebank"]
+  officialHandles  Json
+  /// Legitimate app developer names, e.g. ["Acme Bank plc"]
+  appDevelopers    Json
+  /// Legitimate app package prefixes, e.g. ["com.acmebank"]
+  packagePrefixes  Json
+  /// Extra terms that indicate brand abuse, e.g. ["acme pay"]
+  keywords         Json
+  isDemo           Boolean  @default(false)
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+  scans            Scan[]
+}
+
+/// One analysis run of one entity.
+model Scan {
+  id                String   @id @default(cuid())
+  entityType        String   // PROFILE | WEBSITE | DOMAIN | APP
+  input             String   // raw user input
+  target            String   // normalized identifier (host, platform:handle, package)
+  displayName       String
+  entity            Json     // normalized entity details
+  brandId           String?
+  brand             Brand?   @relation(fields: [brandId], references: [id], onDelete: SetNull)
+  brandSnapshot     Json?    // brand reference as used for this scan
+  riskScore         Int
+  riskLevel         String   // VERY_LOW | LOW | MEDIUM | HIGH | CRITICAL
+  confidenceScore   Int
+  breakdown         Json     // per-category points, caps, contributions
+  scoreAdjustments  Json     // floors / explicit adjustments
+  confidenceFactors Json
+  recommendedActions Json
+  aiAssessment      Json
+  aiSource          String   // GROQ | FALLBACK
+  providerRuns      Json
+  pipelineTrace     Json
+  intelMode         String
+  durationMs        Int
+  createdAt         DateTime @default(now())
+  signals           Signal[]
+
+  @@index([target, createdAt])
+  @@index([createdAt])
+  @@index([riskLevel])
+}
+
+/// One explainable risk (or mitigating) signal that contributed to a scan.
+model Signal {
+  id          String  @id @default(cuid())
+  scanId      String
+  scan        Scan    @relation(fields: [scanId], references: [id], onDelete: Cascade)
+  ruleId      String  // stable rule identifier, e.g. BRAND_TYPOSQUAT
+  category    String
+  severity    String  // INFO | LOW | MEDIUM | HIGH | CRITICAL
+  title       String
+  description String
+  evidence    String
+  impact      Int     // points; negative = mitigating
+  provider    String
+  origin      String  // COMPUTED | LIVE | DEMO
+  ordinal     Int
+
+  @@index([scanId])
+  @@index([ruleId])
+}

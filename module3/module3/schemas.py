@@ -78,6 +78,32 @@ class SourceReference(BaseModel):
     created_at: datetime
 
 
+class EntityListItem(EntityReference):
+    """EntityReference plus audit timestamps — used only by the console's
+    list endpoint. EntityReference itself stays frozen to the shape
+    Module 2 validates via model_validate."""
+
+    created_at: datetime
+    updated_at: datetime
+
+
+class EntityListResponse(BaseModel):
+    items: list[EntityListItem]
+    total: int
+    limit: int
+    offset: int
+
+
+class SourceListResponse(BaseModel):
+    """Source list for provenance display in the console (Module 2 never
+    calls this — it consumes evidence with source_id references only)."""
+
+    items: list[SourceReference]
+    total: int
+    limit: int
+    offset: int
+
+
 class SourceCreate(BaseModel):
     name: str = Field(min_length=1, max_length=200)
     kind: str = Field(min_length=1, max_length=100)

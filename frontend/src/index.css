@@ -1,0 +1,64 @@
+@import "tailwindcss";
+
+@theme {
+  --font-sans: "Archivo Variable", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "JetBrains Mono Variable", ui-monospace, SFMono-Regular, Menlo, monospace;
+
+  /* Surfaces — slate-navy operations palette (shared with Sentinel DRP) */
+  --color-ink: #0e1621;
+  --color-panel: #151f2c;
+  --color-raised: #1b2838;
+  --color-line: #263548;
+  --color-line-soft: #1f2d3e;
+  --color-fg: #e4ebf2;
+  --color-muted: #8aa0b5;
+  --color-faint: #5f7489;
+
+  /* Module 2 risk levels */
+  --color-risk-low: #9cc46b;
+  --color-risk-medium: #e3b341;
+  --color-risk-high: #f0883e;
+  --color-risk-critical: #f0524f;
+
+  /* Report zones */
+  --color-evidence: #9fb3c8;
+  --color-ai: #a78bfa;
+  --color-rec: #6ca6e0;
+
+  --color-action: #6ca6e0;
+}
+
+:root {
+  color-scheme: dark;
+}
+
+html,
+body {
+  background: var(--color-ink);
+  color: var(--color-fg);
+}
+
+body {
+  font-family: var(--font-sans);
+  font-feature-settings: "tnum" 1;
+  -webkit-font-smoothing: antialiased;
+}
+
+.font-condensed {
+  font-stretch: 68%;
+}
+
+:focus-visible {
+  outline: 2px solid var(--color-action);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+::selection {
+  background: color-mix(in srgb, var(--color-action) 40%, transparent);
+}
+
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--color-line) transparent;
+}

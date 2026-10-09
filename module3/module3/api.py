@@ -18,8 +18,8 @@ import uuid
 from collections.abc import Iterator
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, Header, Request, status
-from sqlalchemy import select
+from fastapi import APIRouter, Depends, Header, Query, Request, status
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from module3 import schemas
@@ -88,6 +88,19 @@ def _evidence_reference(record: EvidenceRecord) -> schemas.EvidenceReference:
     )
 
 
+def _entity_list_item(record: EntityRecord) -> schemas.EntityListItem:
+    return schemas.EntityListItem(
+        entity_id=record.entity_id,
+        tenant_id=record.tenant_id,
+        entity_type=schemas.EntityType(record.entity_type),
+        display_name=record.display_name,
+        identifiers=dict(record.identifiers or {}),
+        attributes=dict(record.attributes or {}),
+        created_at=record.created_at,
+        updated_at=record.updated_at,
+    )
+
+
 def _get_entity(db: Session, tenant_id: uuid.UUID, entity_id: uuid.UUID) -> EntityRecord:
     record = db.get(EntityRecord, entity_id)
     if record is None or record.tenant_id != tenant_id:
@@ -132,6 +145,46 @@ def create_source(
     )
 
 
+@router.get("/sources", response_model=schemas.SourceListResponse)
+def list_sources(
+    db: DbDep,
+    tenant: TenantDep,
+    limit: Annotated[int, Query(ge=1, le=200)] = 50,
+    offset: Annotated[int, Query(ge=0)] = 0,
+) -> schemas.SourceListResponse:
+    """Tenant-scoped source list so the console can show provenance names
+    for evidence references (which carry only source_id)."""
+    total = (
+        db.scalar(
+            select(func.count())
+            .select_from(SourceRecord)
+            .where(SourceRecord.tenant_id == tenant)
+        )
+        or 0
+    )
+    records = db.scalars(
+        select(SourceRecord)
+        .where(SourceRecord.tenant_id == tenant)
+        .order_by(SourceRecord.created_at.desc(), SourceRecord.source_id)
+        .limit(limit)
+        .offset(offset)
+    ).all()
+    return schemas.SourceListResponse(
+        items=[
+            schemas.SourceReference(
+                source_id=record.source_id,
+                name=record.name,
+                kind=record.kind,
+                created_at=record.created_at,
+            )
+            for record in records
+        ],
+        total=total,
+        limit=limit,
+        offset=offset,
+    )
+
+
 @router.post(
     "/entities",
     response_model=schemas.EntityReference,
@@ -160,6 +213,38 @@ def create_entity(
     db.commit()
     db.refresh(record)
     return _entity_reference(record)
+
+
+@router.get("/entities", response_model=schemas.EntityListResponse)
+def list_entities(
+    db: DbDep,
+    tenant: TenantDep,
+    limit: Annotated[int, Query(ge=1, le=200)] = 50,
+    offset: Annotated[int, Query(ge=0)] = 0,
+) -> schemas.EntityListResponse:
+    """Tenant-scoped entity list for the console UI, newest first.
+    Module 2 never calls this — it fetches entities by ID only."""
+    total = (
+        db.scalar(
+            select(func.count())
+            .select_from(EntityRecord)
+            .where(EntityRecord.tenant_id == tenant)
+        )
+        or 0
+    )
+    records = db.scalars(
+        select(EntityRecord)
+        .where(EntityRecord.tenant_id == tenant)
+        .order_by(EntityRecord.created_at.desc(), EntityRecord.entity_id)
+        .limit(limit)
+        .offset(offset)
+    ).all()
+    return schemas.EntityListResponse(
+        items=[_entity_list_item(record) for record in records],
+        total=total,
+        limit=limit,
+        offset=offset,
+    )
 
 
 @router.get("/entities/{entity_id}", response_model=schemas.EntityReference)

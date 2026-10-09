@@ -6,3 +6,12 @@ __pycache__/
 *.db
 .venv/
 venv/
+node_modules/
+dist/
+.next/
+out/
+.env.local
+.env.*.local
+*.tsbuildinfo
+next-env.d.ts
+src/generated/
