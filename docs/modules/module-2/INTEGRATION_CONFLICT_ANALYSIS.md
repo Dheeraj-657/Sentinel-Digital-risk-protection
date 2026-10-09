@@ -36,8 +36,8 @@ re-validated against its actual implementation.
 
 | # | Surface | Defined in | Direction | Status |
 |---|---------|-----------|-----------|--------|
-| S1 | BrandDNA aggregate (identity, domains, social profiles, visual hashes, text signals, verification) | `app/schemas/brand_dna.py` | Module 2 ← Module 1 | CONTRACT_PROPOSED |
-| S2 | Brand DNA retrieval path `/api/v1/brands/{brand_id}/dna` | `app/integrations/module1/client.py` (`BRAND_DNA_PATH`) | Module 2 ← Module 1 | CONTRACT_PROPOSED |
+| S1 | BrandDNA aggregate (identity, domains, social profiles, visual hashes, text signals, verification) | `app/schemas/brand_dna.py` | Module 2 ← Module 1 | RESOLVED against Sentinel DRP (2026-10-09) — adapter `integrations/module1/sentinel.py`, see §7 |
+| S2 | Brand DNA retrieval path `/api/v1/brands/{brand_id}/dna` | `app/integrations/module1/client.py` (`BRAND_DNA_PATH`) | Module 2 ← Module 1 | RESOLVED against Sentinel DRP (2026-10-09): real path is `GET /api/brands` (list-only) — see §7 |
 | S3 | EntityReference (normalized entity view) | `app/schemas/entity.py` | Module 2 ← Module 3 | CONTRACT_PROPOSED |
 | S4 | EvidenceReference (scored content + metadata) | `app/schemas/entity.py` | Module 2 ← Module 3 | CONTRACT_PROPOSED |
 | S5 | Entity/evidence retrieval paths `/api/v1/entities/{entity_id}` and `/api/v1/entities/{entity_id}/evidence` | `app/integrations/module3/providers.py` (`ENTITY_PATH`, `ENTITY_EVIDENCE_PATH`) | Module 2 ← Module 3 | CONTRACT_PROPOSED |
@@ -53,8 +53,8 @@ re-validated against its actual implementation.
 
 | ID | Area | Module 2 assumption | Likely divergence | Severity | Detection | Resolution direction |
 |----|------|--------------------|-------------------|----------|-----------|---------------------|
-| C-01 | BrandDNA shape (S1) | Frozen nested model; `brand_id: UUID`; `version: str`; visual anchors as perceptual-hash hex strings; no raw assets | Module 1 may key brands by slug/int, embed assets by URL, or lack a version field | HIGH | `EntityReference`-style `model_validate` failure → `IntegrationUnavailableError("module1", "contract_mismatch")`; analysis jobs fail CLOSED | Module 1 wins; add adapter in `app/integrations/module1` that maps their model → `BrandDNA`. Module 2 pipeline code must not change |
-| C-02 | Brand DNA path (S2) | GET `/api/v1/brands/{brand_id}/dna` returns 200 with BrandDNA; 404 → `MissingBrandDNAError` | Different path, versioned prefix (`/v2/`), or batch endpoint | MEDIUM | 404 on a brand that exists under Module 1's real path → `MissingBrandDNAError` (424) on every analysis | Path lives in one constant (`BRAND_DNA_PATH`); re-point it, add adapter if the payload differs |
+| C-01 | BrandDNA shape (S1) | Frozen nested model; `brand_id: UUID`; `version: str`; visual anchors as perceptual-hash hex strings; no raw assets | Module 1 may key brands by slug/int, embed assets by URL, or lack a version field | HIGH | `EntityReference`-style `model_validate` failure → `IntegrationUnavailableError("module1", "contract_mismatch")`; analysis jobs fail CLOSED | Module 1 wins; add adapter in `app/integrations/module1` that maps their model → `BrandDNA`. Module 2 pipeline code must not change — **RESOLVED 2026-10-09 against Sentinel DRP**: adapter `app/integrations/module1/sentinel.py` (`SentinelBrandClient`), see §7 |
+| C-02 | Brand DNA path (S2) | GET `/api/v1/brands/{brand_id}/dna` returns 200 with BrandDNA; 404 → `MissingBrandDNAError` | Different path, versioned prefix (`/v2/`), or batch endpoint | MEDIUM | 404 on a brand that exists under Module 1's real path → `MissingBrandDNAError` (424) on every analysis | Path lives in one constant (`BRAND_DNA_PATH`); re-point it, add adapter if the payload differs — **RESOLVED 2026-10-09 against Sentinel DRP**: `GET /api/brands` list; see §7 |
 | C-03 | Entity/evidence paths (S3–S5) | Single-entity GET + evidence list per entity; `tenant_id` present in EntityReference body AND sent as `X-Tenant-ID` header | Module 3 may expose search-first APIs, cursor-paginated evidence, or tenant only via token claims | MEDIUM | `InvalidEntityError` (404-mapped) or `contract_mismatch` for valid entities | Constants `ENTITY_PATH` / `ENTITY_EVIDENCE_PATH` are single points of change; adapter maps payloads |
 | C-04 | Evidence metadata keys (S6) | Exact string keys: `days_since_registration`, `whois_privacy`, `recent_account_creation`, `high_post_frequency`, `brand_mimicry_in_bio`, `blocklisted`, `abuse_reports`, `linked_to_known_threat`, `shared_identifiers` | Module 3 uses different names, nesting (`meta.whois.days`), or richer enums instead of booleans | HIGH | Silent: unknown keys are ignored (`metadata.get(...)` returns None) → factors silently omit evidence, risk score drops with no error | Highest-priority conflict. Mitigation today: factors without evidence are omitted (never zero-filled), so a total drop is visible. Resolution: contract test suite against real Module 3 + an explicit "unrecognized-metadata" observability counter (TBD) |
 | C-05 | Tenant header (S7) | `X-Tenant-ID: <uuid>` forwarded downstream; 403 and 404 both mapped to `InvalidEntityError` | Platform standard is OAuth claim / mTLS identity, not a header; downstream may treat header as untrusted | HIGH | If downstream ignores the header and returns other tenants' data, Module 2 cannot detect it — scores would be computed on cross-tenant entities | Module 2 forwards whatever tenant identity the platform authenticates (single tenant system — `app/api/deps.py` parses the same header for inbound). When real auth lands, replace header parsing in ONE place (`get_tenant`) and downstream header injection in the two HTTP clients |
@@ -162,5 +162,59 @@ something Module 2 can satisfy alone.
 4. **Versioning rules**: S8 events follow the minor/major policy in C-09; S1
    and S4 payloads are matched with tolerant adapters (`model_validate`) and
    never with hand-rolled parsers.
-5. **Nothing in this document is verified against real modules** — Modules 1,
-   3, and 4 do not exist in this repository. All items remain open.
+5. **Module 1 is now real** (Sentinel DRP, teammate-provided): C-01/C-02 are
+   resolved against its source (see §7); adapter tests use faked transports —
+   a live run is Phase 3 and live verification is not yet claimed. Modules 3
+   and 4 still do not exist in this repository; their items remain open.
+
+---
+
+## 7. Resolution log
+
+### C-01 + C-02 — RESOLVED against Sentinel DRP (Module 1), 2026-10-09
+
+Sentinel DRP (teammate's Next.js service, provided as `sentinel-drp.zip`) is
+the real Module 1. Its actual contract, read from source:
+
+- `GET /api/brands` — list-only; **no per-brand GET, no `/dna` endpoint**.
+  Returns `{"items": [{id (cuid string), name, officialDomains[],
+  officialHandles[], appDevelopers[], packagePrefixes[], keywords[],
+  isDemo, scanCount}]}`.
+
+Resolution (adapter `app/integrations/module1/sentinel.py`,
+`SentinelBrandClient`; bound in `app/main.py` when `module1_base_url` is
+set; tests `tests/test_module1_sentinel.py`):
+
+- **C-02 (path)**: `SENTINEL_BRANDS_PATH = "/api/brands"`; selection scans
+  the list. A 404 on the list route is route drift (`http_404` →
+  `IntegrationUnavailableError`), NOT `MissingBrandDNAError` — brand absence
+  is decided by the 200 list's contents.
+- **C-01 (shape)** — mapping decisions (full detail in the adapter
+  docstring):
+  - `brand_id` = `uuid5(SENTINEL_BRAND_NAMESPACE, sentinel_cuid)` —
+    deterministic bridge (`sentinel_cuid_to_brand_uuid` is the public
+    helper); Module 2 keeps UUID keys everywhere (API, jobs, threats,
+    `uq_threat_tenant_brand_entity`). The raw cuid string is also accepted.
+  - `version` = constant `SENTINEL_BRAND_VERSION` — Sentinel's list payload
+    omits `updatedAt`; this is NOT a freshness signal.
+  - `keywords` are abuse-detection vocabulary → NOT mapped to
+    `identity.aliases` (mapping them would inflate text-similarity scores).
+  - `officialDomains` → `domains` + `verification.verified_domains`;
+    `officialHandles` → `verification.verified_social_handles`.
+  - visual assets / social profiles / text signals: empty — honestly
+    absent, never fabricated (drives only visual/text factor anchors;
+    identity and domain anchors are unaffected).
+  - `appDevelopers` / `packagePrefixes` / `isDemo` / `scanCount`: dropped
+    at the boundary (no Module 2 consumer).
+- **Tenancy**: brand anchors are tenant-agnostic — no `X-Tenant-ID` is sent
+  to Module 1 (test-pinned). Module 2 threat tables stay tenant-scoped:
+  two tenants analyzing the same Sentinel brand get separate threat rows
+  (test-pinned).
+- **Error semantics** unchanged from the Module 1 convention: absent brand
+  → `MissingBrandDNAError` (424); non-200 → `http_NNN`; invalid JSON →
+  `invalid_json`; shape drift → `contract_mismatch`; transport
+  failure/timeout → `network_error`; upstream bodies never leak.
+
+Verification status: adapter unit/contract tests pass (113/113 suite,
+faked transport, no network). LIVE verification against a running Sentinel
+instance is Phase 3 of the integration plan — **not yet claimed**.

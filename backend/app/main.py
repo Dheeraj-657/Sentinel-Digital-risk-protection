@@ -24,8 +24,8 @@ from app.core.errors import AppError, ErrorCode
 from app.core.logging import configure_logging, get_correlation_id, get_logger, new_correlation_id, set_correlation_id, set_request_id
 from app.core.observability import metrics
 from app.events.publisher import LoggingEventPublisher
-from app.integrations.module1.client import HTTPBrandDNAClient
 from app.integrations.module1.mock import MockBrandDNAClient
+from app.integrations.module1.sentinel import SentinelBrandClient
 from app.integrations.module3.mock import MockEntityProvider, MockEvidenceProvider
 from app.integrations.module3.providers import HTTPModule3Client
 from app.ml.registry import build_model_set
@@ -173,7 +173,7 @@ def create_app(settings: Settings | None = None, *, engine=None) -> FastAPI:
         app.state.publisher = LoggingEventPublisher()
 
         if settings.module1_base_url:
-            app.state.brand_client = HTTPBrandDNAClient(
+            app.state.brand_client = SentinelBrandClient(
                 settings.module1_base_url, settings.integration_http_timeout_seconds
             )
         else:
