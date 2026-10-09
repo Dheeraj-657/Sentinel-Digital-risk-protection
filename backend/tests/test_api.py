@@ -298,3 +298,86 @@ class TestOpsEndpoints:
     def test_correlation_id_is_echoed(self, client):
         response = client.get("/healthz", headers={"X-Correlation-ID": "synthetic-corr-42"})
         assert response.headers["X-Correlation-ID"] == "synthetic-corr-42"
+
+
+class TestAnalysisListEndpoint:
+    """GET /api/v1/analysis — job history list (read-only, additive)."""
+
+    def test_empty_tenant_gets_empty_page(self, client, tenant_id):
+        response = client.get(
+            f"{client.app.state.settings.api_v1_prefix}/analysis",
+            headers=headers(tenant_id),
+        )
+        assert response.status_code == 200
+        assert response.json() == {"items": [], "total": 0, "limit": 50, "offset": 0}
+
+    def test_lists_jobs_newest_first_with_threat_id(
+        self, client, tenant_id, brand_id, entity_id
+    ):
+        first = run_analysis(client, tenant_id, brand_id, entity_id)
+        second = run_analysis(client, tenant_id, brand_id, entity_id)
+        response = client.get(
+            f"{client.app.state.settings.api_v1_prefix}/analysis",
+            headers=headers(tenant_id),
+        )
+        assert response.status_code == 200
+        body = response.json()
+        assert body["total"] == 2
+        ids = [item["job_id"] for item in body["items"]]
+        assert ids.index(second["job_id"]) < ids.index(first["job_id"])
+        newest = body["items"][0]
+        assert set(newest) == {
+            "job_id", "status", "brand_id", "entity_id", "created_at",
+            "started_at", "completed_at", "error_code", "threat_id",
+        }
+        assert newest["status"] == "COMPLETED"
+        assert newest["threat_id"] == second["result"]["threat_id"]
+
+    def test_pagination_window(self, client, tenant_id, brand_id, entity_id):
+        run_analysis(client, tenant_id, brand_id, entity_id)
+        run_analysis(client, tenant_id, brand_id, entity_id)
+        response = client.get(
+            f"{client.app.state.settings.api_v1_prefix}/analysis",
+            headers=headers(tenant_id),
+            params={"limit": 1, "offset": 1},
+        )
+        assert response.status_code == 200
+        body = response.json()
+        assert body["limit"] == 1
+        assert body["offset"] == 1
+        assert body["total"] == 2
+        assert len(body["items"]) == 1
+
+    def test_limit_bounds_rejected(self, client, tenant_id):
+        response = client.get(
+            f"{client.app.state.settings.api_v1_prefix}/analysis",
+            headers=headers(tenant_id),
+            params={"limit": 0},
+        )
+        assert response.status_code == 422
+        assert response.json()["error_code"] == "VALIDATION_ERROR"
+
+    def test_status_filter(self, client, tenant_id, brand_id, entity_id):
+        run_analysis(client, tenant_id, brand_id, entity_id)
+        run_analysis(client, tenant_id, brand_id, entity_id)
+        failed = client.get(
+            f"{client.app.state.settings.api_v1_prefix}/analysis",
+            headers=headers(tenant_id),
+            params={"status": "FAILED"},
+        ).json()
+        completed = client.get(
+            f"{client.app.state.settings.api_v1_prefix}/analysis",
+            headers=headers(tenant_id),
+            params={"status": "COMPLETED"},
+        ).json()
+        assert failed["total"] == 0
+        assert completed["total"] == 2
+
+    def test_tenant_isolation(self, client, tenant_id, brand_id, entity_id):
+        run_analysis(client, tenant_id, brand_id, entity_id)
+        response = client.get(
+            f"{client.app.state.settings.api_v1_prefix}/analysis",
+            headers=headers(uuid.uuid4()),
+        )
+        assert response.status_code == 200
+        assert response.json()["total"] == 0

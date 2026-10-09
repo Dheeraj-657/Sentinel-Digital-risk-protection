@@ -53,3 +53,29 @@ class AnalysisJobResponse(BaseModel):
     error_code: str | None = None
     error_message: str | None = None
     result: AnalysisResultSummary | None = None
+
+
+class AnalysisJobListItem(BaseModel):
+    """One row of the job-history list (GET /api/v1/analysis).
+
+    The ORM job has no updated_at column and the schema layer is frozen, so
+    started_at/completed_at stand in for recency and threat_id is joined from
+    AnalysisResult — present for completed jobs only.
+    """
+
+    job_id: uuid.UUID
+    status: JobStatus
+    brand_id: uuid.UUID
+    entity_id: uuid.UUID
+    created_at: datetime
+    started_at: datetime | None = None
+    completed_at: datetime | None = None
+    error_code: str | None = None
+    threat_id: uuid.UUID | None = None
+
+
+class AnalysisJobListResponse(BaseModel):
+    items: list[AnalysisJobListItem]
+    total: int
+    limit: int
+    offset: int
