@@ -19,7 +19,7 @@ from collections.abc import Iterator
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, Header, Query, Request, status
-from sqlalchemy import func, select
+from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session
 
 from module3 import schemas
@@ -201,12 +201,32 @@ def create_entity(
             http_status=409,
             details={"entity_id": str(entity_id)},
         )
+    normalized = normalize_identifiers(payload.identifiers)
+    domain_key = normalized.get("domain")
+    if domain_key:
+        conflict_id = db.scalars(
+            select(EntityRecord.entity_id)
+            .where(
+                EntityRecord.tenant_id == tenant,
+                EntityRecord.entity_type == payload.entity_type.value,
+                EntityRecord.identifiers["domain"].as_string() == domain_key,
+            )
+            .limit(1)
+        ).first()
+        if conflict_id is not None:
+            raise AppError(
+                ErrorCode.DUPLICATE_ENTITY,
+                f"An entity with domain '{domain_key}' already exists for this "
+                "tenant and type.",
+                http_status=409,
+                details={"existing_entity_id": str(conflict_id)},
+            )
     record = EntityRecord(
         entity_id=entity_id,
         tenant_id=tenant,
         entity_type=payload.entity_type.value,
         display_name=payload.display_name,
-        identifiers=normalize_identifiers(payload.identifiers),
+        identifiers=normalized,
         attributes=dict(payload.attributes),
     )
     db.add(record)
@@ -219,22 +239,39 @@ def create_entity(
 def list_entities(
     db: DbDep,
     tenant: TenantDep,
+    entity_type: schemas.EntityType | None = Query(default=None),
+    q: Annotated[str | None, Query(max_length=200)] = None,
     limit: Annotated[int, Query(ge=1, le=200)] = 50,
     offset: Annotated[int, Query(ge=0)] = 0,
 ) -> schemas.EntityListResponse:
-    """Tenant-scoped entity list for the console UI, newest first.
-    Module 2 never calls this — it fetches entities by ID only."""
+    """Tenant-scoped entity list for the console UI, newest first, with
+    optional entity_type and free-text filters. Module 2 never calls this —
+    it fetches entities by ID only."""
+    conditions = [EntityRecord.tenant_id == tenant]
+    if entity_type is not None:
+        conditions.append(EntityRecord.entity_type == entity_type.value)
+    if q:
+        pattern = f"%{q.lower()}%"
+        conditions.append(
+            or_(
+                func.lower(EntityRecord.display_name).like(pattern),
+                func.lower(EntityRecord.identifiers["domain"].as_string()).like(
+                    pattern
+                ),
+                func.lower(EntityRecord.identifiers["handle"].as_string()).like(
+                    pattern
+                ),
+            )
+        )
     total = (
         db.scalar(
-            select(func.count())
-            .select_from(EntityRecord)
-            .where(EntityRecord.tenant_id == tenant)
+            select(func.count()).select_from(EntityRecord).where(*conditions)
         )
         or 0
     )
     records = db.scalars(
         select(EntityRecord)
-        .where(EntityRecord.tenant_id == tenant)
+        .where(*conditions)
         .order_by(EntityRecord.created_at.desc(), EntityRecord.entity_id)
         .limit(limit)
         .offset(offset)
@@ -250,6 +287,25 @@ def list_entities(
 @router.get("/entities/{entity_id}", response_model=schemas.EntityReference)
 def get_entity(entity_id: uuid.UUID, db: DbDep, tenant: TenantDep) -> schemas.EntityReference:
     return _entity_reference(_get_entity(db, tenant, entity_id))
+
+
+@router.patch("/entities/{entity_id}", response_model=schemas.EntityListItem)
+def update_entity(
+    entity_id: uuid.UUID,
+    payload: schemas.EntityUpdate,
+    db: DbDep,
+    tenant: TenantDep,
+) -> schemas.EntityListItem:
+    record = _get_entity(db, tenant, entity_id)
+    if payload.display_name is not None:
+        record.display_name = payload.display_name
+    if payload.identifiers is not None:
+        record.identifiers = normalize_identifiers(payload.identifiers)
+    if payload.attributes is not None:
+        record.attributes = dict(payload.attributes)
+    db.commit()
+    db.refresh(record)
+    return _entity_list_item(record)
 
 
 @router.post(

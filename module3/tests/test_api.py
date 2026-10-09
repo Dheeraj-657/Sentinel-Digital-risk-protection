@@ -324,7 +324,11 @@ class TestEvidenceRetrieval:
     ):
         source = make_source(tenant_a)
         first = make_entity(tenant_a)
-        second = make_entity(tenant_a, display_name="Other Site")
+        second = make_entity(
+            tenant_a,
+            display_name="Other Site",
+            identifiers={"domain": "other-site.example"},
+        )
         make_evidence(tenant_a, first["entity_id"], source["source_id"])
         response = client.get(
             f"/api/v1/entities/{second['entity_id']}/evidence",

@@ -11,7 +11,7 @@ from datetime import datetime
 from enum import Enum
 from typing import Any
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 
 class EntityType(str, Enum):
@@ -115,6 +115,26 @@ class EntityCreate(BaseModel):
     display_name: str | None = Field(default=None, max_length=300)
     identifiers: dict[str, str] = Field(default_factory=dict)
     attributes: dict[str, Any] = Field(default_factory=dict)
+
+
+class EntityUpdate(BaseModel):
+    """Partial entity update — None means leave unchanged, unknown keys 422."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    display_name: str | None = Field(default=None, min_length=1, max_length=300)
+    identifiers: dict[str, str] | None = None
+    attributes: dict[str, Any] | None = None
+
+    @field_validator("display_name")
+    @classmethod
+    def _strip_display_name(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        stripped = value.strip()
+        if not stripped:
+            raise ValueError("display_name cannot be blank")
+        return stripped
 
 
 class EvidenceCreate(BaseModel):

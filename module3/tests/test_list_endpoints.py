@@ -33,8 +33,16 @@ class TestEntityList:
 
     def test_newest_first(self, client, tenant_headers, make_entity, tenant_a):
         headers = tenant_headers(tenant_a)
-        first = make_entity(tenant_a, display_name="synthetic-first")
-        second = make_entity(tenant_a, display_name="synthetic-second")
+        first = make_entity(
+            tenant_a,
+            display_name="synthetic-first",
+            identifiers={"domain": "synthetic-first.example"},
+        )
+        second = make_entity(
+            tenant_a,
+            display_name="synthetic-second",
+            identifiers={"domain": "synthetic-second.example"},
+        )
         response = client.get("/api/v1/entities", headers=headers)
         items = response.json()["items"]
         assert len(items) == 2
@@ -45,7 +53,11 @@ class TestEntityList:
     def test_pagination(self, client, tenant_headers, make_entity, tenant_a):
         headers = tenant_headers(tenant_a)
         for i in range(3):
-            make_entity(tenant_a, display_name=f"synthetic-{i}")
+            make_entity(
+                tenant_a,
+                display_name=f"synthetic-{i}",
+                identifiers={"domain": f"synthetic-{i}.example"},
+            )
         page_one = client.get(
             "/api/v1/entities", params={"limit": 2, "offset": 0}, headers=headers
         )
