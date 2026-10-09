@@ -1,4 +1,15 @@
-import type { FactorType, RiskLevel, ThreatClassification } from "./types";
+import type {
+  FactorType,
+  JobStatus,
+  M1ActionPriority,
+  M1DataOrigin,
+  M1EntityType,
+  M1RiskCategory,
+  M1RiskLevel,
+  M1Severity,
+  RiskLevel,
+  ThreatClassification,
+} from "./types";
 
 export function cx(...parts: Array<string | false | null | undefined>): string {
   return parts.filter(Boolean).join(" ");
@@ -92,3 +103,76 @@ export const ENTITY_TYPE_LABEL: Record<string, string> = {
 export function pct(value: number): string {
   return `${Math.round(value * 100)}%`;
 }
+
+/* ---------- Module 1 (Sentinel) variants — VERY_LOW level, own categories ---------- */
+
+export const M1_RISK_LEVEL_LABEL: Record<M1RiskLevel, string> = {
+  VERY_LOW: "Very low",
+  LOW: "Low",
+  MEDIUM: "Medium",
+  HIGH: "High",
+  CRITICAL: "Critical",
+};
+
+/** Module 1 has a VERY_LOW tier the shared tokens don't — it reuses the low ramp. */
+export const M1_RISK_LEVEL_CLASS: Record<M1RiskLevel, string> = {
+  VERY_LOW: "text-risk-low",
+  LOW: "text-risk-low",
+  MEDIUM: "text-risk-medium",
+  HIGH: "text-risk-high",
+  CRITICAL: "text-risk-critical",
+};
+
+export const M1_RISK_LEVEL_BAR: Record<M1RiskLevel, string> = {
+  VERY_LOW: "bg-risk-low",
+  LOW: "bg-risk-low",
+  MEDIUM: "bg-risk-medium",
+  HIGH: "bg-risk-high",
+  CRITICAL: "bg-risk-critical",
+};
+
+export const M1_ENTITY_TYPE_LABEL: Record<M1EntityType, string> = {
+  PROFILE: "Profile",
+  WEBSITE: "Website",
+  DOMAIN: "Domain",
+  APP: "Mobile app",
+};
+
+export const M1_SEVERITY_LABEL: Record<M1Severity, string> = {
+  INFO: "Info",
+  LOW: "Low",
+  MEDIUM: "Medium",
+  HIGH: "High",
+  CRITICAL: "Critical",
+};
+
+export const M1_CATEGORY_LABEL: Record<M1RiskCategory, string> = {
+  identity: "Identity",
+  impersonation: "Impersonation",
+  behavioral: "Behavioral",
+  domain: "Domain",
+  reputation: "Reputation",
+  brandSimilarity: "Brand similarity",
+  technical: "Technical",
+};
+
+export const M1_PRIORITY_LABEL: Record<M1ActionPriority, string> = {
+  IMMEDIATE: "Immediate",
+  HIGH: "High",
+  MEDIUM: "Medium",
+  LOW: "Low",
+};
+
+export const M1_ORIGIN_LABEL: Record<M1DataOrigin, string> = {
+  COMPUTED: "Computed",
+  LIVE: "Live",
+  DEMO: "Demo dataset",
+};
+
+export const JOB_STATUS_LABEL: Record<JobStatus, string> = {
+  QUEUED: "Queued",
+  RUNNING: "Running",
+  COMPLETED: "Completed",
+  FAILED: "Failed",
+  CANCELLED: "Cancelled",
+};

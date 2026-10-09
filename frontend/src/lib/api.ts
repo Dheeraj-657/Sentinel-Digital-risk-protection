@@ -1,14 +1,25 @@
 import type {
   AnalysisJob,
   M1Brand,
+  M1BrandInput,
   M1Health,
+  M1RiskLevel,
+  M1ScanCreated,
+  M1ScanDetail,
+  M1ScanListResponse,
+  M1ScanRequest,
+  M1EntityType,
+  M1Stats,
+  M2JobListResponse,
   M3Entity,
   M3EntityListResponse,
+  M3EntityListItem,
+  M3EntityType,
   M3Evidence,
   M3EvidenceType,
-  M3EntityType,
   M3Source,
   M3SourceListResponse,
+  JobStatus,
   RiskLevel,
   ThreatDetail,
   ThreatListResponse,
@@ -124,6 +135,12 @@ export type ThreatQueryParams = {
   offset?: number;
 };
 
+export type JobQueryParams = {
+  status?: JobStatus;
+  limit?: number;
+  offset?: number;
+};
+
 export const m2 = {
   ready: (signal?: AbortSignal) =>
     apiFetch<{ status: string; database: string }>("/readyz", { signal }),
@@ -144,6 +161,9 @@ export const m2 = {
 
   getAnalysis: (jobId: string, tenant: string, signal?: AbortSignal) =>
     apiFetch<AnalysisJob>(`/api/v1/analysis/${jobId}`, { tenant, signal }),
+
+  listJobs: (params: JobQueryParams, tenant: string, signal?: AbortSignal) =>
+    apiFetch<M2JobListResponse>(`/api/v1/analysis${queryString(params)}`, { tenant, signal }),
 
   listThreats: (params: ThreatQueryParams, tenant: string, signal?: AbortSignal) =>
     apiFetch<ThreatListResponse>(`/api/v1/threats${queryString(params)}`, { tenant, signal }),
@@ -168,6 +188,8 @@ export const m2 = {
 // ---------- Module 3 (Entity & Evidence, :8001 via proxy) ----------
 
 export type EntityQueryParams = {
+  entity_type?: M3EntityType;
+  q?: string;
   limit?: number;
   offset?: number;
 };
@@ -193,6 +215,23 @@ export const m3 = {
     signal?: AbortSignal,
   ) =>
     apiFetch<M3Entity>("/api/v1/entities", { method: "POST", body: payload, tenant, signal }),
+
+  updateEntity: (
+    entityId: string,
+    payload: {
+      display_name?: string;
+      identifiers?: Record<string, string>;
+      attributes?: Record<string, unknown>;
+    },
+    tenant: string,
+    signal?: AbortSignal,
+  ) =>
+    apiFetch<M3EntityListItem>(`/api/v1/entities/${entityId}`, {
+      method: "PATCH",
+      body: payload,
+      tenant,
+      signal,
+    }),
 
   listEvidence: (entityId: string, tenant: string, signal?: AbortSignal) =>
     apiFetch<M3Evidence[]>(`/api/v1/entities/${entityId}/evidence`, { tenant, signal }),
@@ -230,9 +269,45 @@ export const m3 = {
 
 // ---------- Module 1 (Sentinel DRP, :3000 via proxy) ----------
 
+export type ScanQueryParams = {
+  type?: M1EntityType;
+  level?: M1RiskLevel;
+  q?: string;
+  target?: string;
+  brand?: string;
+  limit?: number;
+  cursor?: string;
+};
+
 export const m1 = {
   listBrands: (signal?: AbortSignal) =>
     apiFetch<{ items: M1Brand[] }>("/api/brands", { signal }),
 
   health: (signal?: AbortSignal) => apiFetch<M1Health>("/api/health", { signal }),
+
+  getBrand: (id: string, signal?: AbortSignal) =>
+    apiFetch<M1Brand>(`/api/brands/${id}`, { signal }),
+
+  createBrand: (payload: M1BrandInput, signal?: AbortSignal) =>
+    apiFetch<{ id: string }>("/api/brands", { method: "POST", body: payload, signal }),
+
+  updateBrand: (id: string, payload: M1BrandInput, signal?: AbortSignal) =>
+    apiFetch<M1Brand>(`/api/brands/${id}`, { method: "PATCH", body: payload, signal }),
+
+  deleteBrand: (id: string, signal?: AbortSignal) =>
+    apiFetch<void>(`/api/brands/${id}`, { method: "DELETE", signal }),
+
+  listScans: (params: ScanQueryParams, signal?: AbortSignal) =>
+    apiFetch<M1ScanListResponse>(`/api/scans${queryString(params)}`, { signal }),
+
+  getScan: (id: string, signal?: AbortSignal) =>
+    apiFetch<M1ScanDetail>(`/api/scans/${id}`, { signal }),
+
+  createScan: (payload: M1ScanRequest, signal?: AbortSignal) =>
+    apiFetch<M1ScanCreated>("/api/scans", { method: "POST", body: payload, signal }),
+
+  deleteScan: (id: string, signal?: AbortSignal) =>
+    apiFetch<void>(`/api/scans/${id}`, { method: "DELETE", signal }),
+
+  getStats: (signal?: AbortSignal) => apiFetch<M1Stats>("/api/stats", { signal }),
 };

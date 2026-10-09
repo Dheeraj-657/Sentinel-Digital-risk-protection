@@ -1,5 +1,13 @@
-import { cx, RISK_LEVEL_BAR, RISK_LEVEL_CLASS, RISK_LEVEL_LABEL } from "../lib/format";
-import type { RiskLevel } from "../lib/types";
+import {
+  cx,
+  M1_RISK_LEVEL_BAR,
+  M1_RISK_LEVEL_CLASS,
+  M1_RISK_LEVEL_LABEL,
+  RISK_LEVEL_BAR,
+  RISK_LEVEL_CLASS,
+  RISK_LEVEL_LABEL,
+} from "../lib/format";
+import type { M1RiskLevel, RiskLevel } from "../lib/types";
 import { errorMessage } from "../lib/hooks";
 
 export function Card({
@@ -138,6 +146,71 @@ export function ScoreBar({
     >
       <div
         className={cx("h-full rounded", RISK_LEVEL_BAR[level])}
+        style={{ width: `${Math.min(100, Math.max(0, value))}%` }}
+      />
+    </div>
+  );
+}
+
+/** Module 1 risk-level badge — its VERY_LOW tier maps onto the low tone. */
+export function M1RiskLevelBadge({ level }: { level: M1RiskLevel }) {
+  const tone = level === "VERY_LOW" ? "low" : (level.toLowerCase() as BadgeTone);
+  return <Badge tone={tone}>{M1_RISK_LEVEL_LABEL[level]}</Badge>;
+}
+
+/** Module 1 large risk-score readout (VERY_LOW-aware). */
+export function M1RiskScore({
+  score,
+  level,
+  size = "md",
+}: {
+  score: number;
+  level: M1RiskLevel;
+  size?: "md" | "lg";
+}) {
+  return (
+    <div className="flex flex-col items-center">
+      <span
+        className={cx(
+          "font-condensed font-mono font-bold leading-none",
+          M1_RISK_LEVEL_CLASS[level],
+          size === "lg" ? "text-6xl" : "text-3xl",
+        )}
+      >
+        {Math.round(score)}
+      </span>
+      <span
+        className={cx(
+          "mt-1 text-[11px] font-semibold uppercase tracking-widest",
+          M1_RISK_LEVEL_CLASS[level],
+        )}
+      >
+        {M1_RISK_LEVEL_LABEL[level]}
+      </span>
+    </div>
+  );
+}
+
+/** Module 1 0–100 bar (VERY_LOW-aware). */
+export function M1ScoreBar({
+  value,
+  level,
+  className,
+}: {
+  value: number;
+  level: M1RiskLevel;
+  className?: string;
+}) {
+  return (
+    <div
+      className={cx("h-1.5 w-full overflow-hidden rounded bg-raised", className)}
+      role="meter"
+      aria-valuenow={Math.round(value)}
+      aria-valuemin={0}
+      aria-valuemax={100}
+    >
+      <div
+        className={cx("h-full rounded", M1_RISK_LEVEL_BAR[level])}
         style={{ width: `${Math.min(100, Math.max(0, value))}%` }}
       />
     </div>

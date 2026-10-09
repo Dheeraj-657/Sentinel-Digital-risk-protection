@@ -26,6 +26,163 @@ export interface M1Health {
   providers: { id: string; name: string; kind: string; origin: string }[];
 }
 
+export type M1RiskLevel = "VERY_LOW" | "LOW" | "MEDIUM" | "HIGH" | "CRITICAL";
+export type M1EntityType = "PROFILE" | "WEBSITE" | "DOMAIN" | "APP";
+export type M1Severity = "INFO" | "LOW" | "MEDIUM" | "HIGH" | "CRITICAL";
+export type M1RiskCategory =
+  | "identity"
+  | "impersonation"
+  | "behavioral"
+  | "domain"
+  | "reputation"
+  | "brandSimilarity"
+  | "technical";
+export type M1DataOrigin = "COMPUTED" | "LIVE" | "DEMO";
+export type M1ActionPriority = "IMMEDIATE" | "HIGH" | "MEDIUM" | "LOW";
+
+export interface M1Signal {
+  id: string;
+  ruleId: string;
+  category: M1RiskCategory;
+  severity: M1Severity;
+  title: string;
+  description: string;
+  /** Concrete observed evidence string (Module 1 keeps one string per signal). */
+  evidence: string;
+  impact: number;
+  provider: string;
+  origin: M1DataOrigin;
+  reliability: number;
+}
+
+export interface M1CategoryScore {
+  category: M1RiskCategory;
+  label: string;
+  cap: number;
+  rawPoints: number;
+  mitigationPoints: number;
+  points: number;
+  percent: number;
+  signalCount: number;
+  capped: boolean;
+}
+
+export interface M1RecommendedAction {
+  id: string;
+  action: string;
+  priority: M1ActionPriority;
+  rationale: string;
+  basedOn: string[];
+}
+
+export interface M1BrandInput {
+  name: string;
+  officialDomains?: string[];
+  officialHandles?: string[];
+  appDevelopers?: string[];
+  packagePrefixes?: string[];
+  keywords?: string[];
+}
+
+export interface M1ScanRequest {
+  entityType: M1EntityType;
+  input: string;
+  claimedDeveloper?: string;
+  brandId?: string | null;
+}
+
+/** POST /api/scans returns the full report plus the stored id. */
+export type M1ScanCreated = M1ScanReport & { id: string };
+
+export interface M1ScanReport {
+  id?: string;
+  riskScore: number;
+  riskLevel: M1RiskLevel;
+  confidenceScore: number;
+  baseScore: number;
+  riskBreakdown: Record<M1RiskCategory, number>;
+  categories: M1CategoryScore[];
+  scoreAdjustments: { kind: "FLOOR" | "CEILING"; value: number; reason: string; ruleId: string }[];
+  confidenceFactors: { key: string; label: string; points: number; max: number; detail: string }[];
+  signals: M1Signal[];
+  aiAssessment: {
+    summary: string;
+    keyFindings: { text: string; signalIds: string[] }[];
+    actionNotes: { actionId: string; note: string }[];
+    caveats: string[];
+    model: string | null;
+    source: "GROQ" | "FALLBACK";
+    notes: string[];
+  };
+  recommendedActions: M1RecommendedAction[];
+  providerRuns: {
+    providerId: string;
+    providerName: string;
+    kind: string;
+    status: string;
+    origin: M1DataOrigin;
+    latencyMs: number;
+    message?: string;
+  }[];
+  intelMode: "demo" | "live";
+  durationMs: number;
+  timestamp: string;
+  entity: {
+    type: M1EntityType;
+    input: string;
+    target: string;
+    displayName: string;
+    claimedDeveloper?: string;
+  };
+  /** BrandReference — id present when the scan ran against a stored brand. */
+  brand: (M1BrandInput & { id?: string }) | null;
+}
+
+export interface M1ScanSummary {
+  id: string;
+  entityType: M1EntityType;
+  target: string;
+  displayName: string;
+  brandName: string | null;
+  riskScore: number;
+  riskLevel: M1RiskLevel;
+  confidenceScore: number;
+  aiSource: string;
+  signalCount: number;
+  createdAt: string;
+}
+
+export interface M1ScanListResponse {
+  items: M1ScanSummary[];
+  nextCursor: string | null;
+  total: number;
+}
+
+export interface M1ScanHistoryPoint {
+  id: string;
+  riskScore: number;
+  riskLevel: M1RiskLevel;
+  confidenceScore: number;
+  createdAt: string;
+  aiSource: string;
+}
+
+export interface M1ScanDetail {
+  report: M1ScanReport;
+  history: M1ScanHistoryPoint[];
+}
+
+export interface M1Stats {
+  total: number;
+  levels: Record<M1RiskLevel, number>;
+  byType: { type: M1EntityType; count: number; avgRisk: number }[];
+  avgRisk: number;
+  avgConfidence: number;
+  recentHigh: M1ScanSummary[];
+  recent: M1ScanSummary[];
+  topSignals: { ruleId: string; title: string; count: number }[];
+}
+
 // ---------- Module 2 (Risk Engine) ----------
 
 export type JobStatus = "QUEUED" | "RUNNING" | "COMPLETED" | "FAILED" | "CANCELLED";
@@ -115,6 +272,26 @@ export interface ThreatDetail extends ThreatSummary {
 
 export interface ThreatListResponse {
   items: ThreatSummary[];
+  total: number;
+  limit: number;
+  offset: number;
+}
+
+export interface M2JobListItem {
+  job_id: string;
+  status: JobStatus;
+  brand_id: string;
+  entity_id: string;
+  created_at: string;
+  started_at?: string | null;
+  completed_at?: string | null;
+  error_code?: string | null;
+  /** Present for completed jobs only. */
+  threat_id?: string | null;
+}
+
+export interface M2JobListResponse {
+  items: M2JobListItem[];
   total: number;
   limit: number;
   offset: number;

@@ -132,3 +132,144 @@ describe("apiFetch", () => {
     expect(init.body).toBe(JSON.stringify({ name: "test", kind: "fixture" }));
   });
 });
+
+describe("m1 scan endpoints", () => {
+  it("lists scans with filters, limit, and cursor", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      jsonResponse(200, { items: [], nextCursor: null, total: 0 }),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+    await m1.listScans({ q: "acme", type: "PROFILE", level: "HIGH", limit: 25, cursor: "abc" });
+    const [url] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(url).toBe("/api/scans?q=acme&type=PROFILE&level=HIGH&limit=25&cursor=abc");
+  });
+
+  it("omits empty scan filters from the query", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      jsonResponse(200, { items: [], nextCursor: null, total: 0 }),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+    await m1.listScans({});
+    const [url] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(url).toBe("/api/scans");
+  });
+
+  it("creates a scan with the normalized request body", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(jsonResponse(201, { id: "s1", riskScore: 10 }));
+    vi.stubGlobal("fetch", fetchMock);
+    await m1.createScan({ entityType: "PROFILE", input: "@acme_help", brandId: "b1" });
+    const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(url).toBe("/api/scans");
+    expect(init.method).toBe("POST");
+    expect(init.body).toBe(
+      JSON.stringify({ entityType: "PROFILE", input: "@acme_help", brandId: "b1" }),
+    );
+  });
+
+  it("fetches scan detail by id", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(jsonResponse(200, { report: {}, history: [] }));
+    vi.stubGlobal("fetch", fetchMock);
+    await m1.getScan("s1");
+    const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(url).toBe("/api/scans/s1");
+    expect(init.method).toBe("GET");
+  });
+
+  it("deletes a scan via DELETE", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(new Response(null, { status: 204 }));
+    vi.stubGlobal("fetch", fetchMock);
+    await expect(m1.deleteScan("s1")).resolves.toBeUndefined();
+    const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(url).toBe("/api/scans/s1");
+    expect(init.method).toBe("DELETE");
+  });
+});
+
+describe("m1 brand endpoints", () => {
+  it("fetches a single brand by id", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(jsonResponse(200, { id: "b1", name: "Acme" }));
+    vi.stubGlobal("fetch", fetchMock);
+    await m1.getBrand("b1");
+    const [url] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(url).toBe("/api/brands/b1");
+  });
+
+  it("creates a brand via POST", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(jsonResponse(201, { id: "b2" }));
+    vi.stubGlobal("fetch", fetchMock);
+    await m1.createBrand({ name: "Acme", officialDomains: ["acme.example"] });
+    const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(url).toBe("/api/brands");
+    expect(init.method).toBe("POST");
+    expect(init.body).toBe(
+      JSON.stringify({ name: "Acme", officialDomains: ["acme.example"] }),
+    );
+  });
+
+  it("updates a brand via PATCH", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(jsonResponse(200, { id: "b1", name: "Acme 2" }));
+    vi.stubGlobal("fetch", fetchMock);
+    await m1.updateBrand("b1", { name: "Acme 2" });
+    const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(url).toBe("/api/brands/b1");
+    expect(init.method).toBe("PATCH");
+    expect(init.body).toBe(JSON.stringify({ name: "Acme 2" }));
+  });
+
+  it("deletes a brand via DELETE", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(new Response(null, { status: 204 }));
+    vi.stubGlobal("fetch", fetchMock);
+    await expect(m1.deleteBrand("b1")).resolves.toBeUndefined();
+    const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(url).toBe("/api/brands/b1");
+    expect(init.method).toBe("DELETE");
+  });
+
+  it("fetches dashboard stats", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      jsonResponse(200, { total: 0, levels: {}, byType: [], avgRisk: 0, avgConfidence: 0 }),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+    await m1.getStats();
+    const [url] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(url).toBe("/api/stats");
+  });
+});
+
+describe("m2 listJobs", () => {
+  it("lists jobs with status, limit, and offset", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      jsonResponse(200, { items: [], total: 0, limit: 25, offset: 0 }),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+    await m2.listJobs({ status: "COMPLETED", limit: 25, offset: 50 }, "t");
+    const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(url).toBe("/api/v1/analysis?status=COMPLETED&limit=25&offset=50");
+    expect(new Headers(init.headers).get("X-Tenant-ID")).toBe("t");
+  });
+});
+
+describe("m3 updateEntity and filters", () => {
+  it("updates an entity via PATCH", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      jsonResponse(200, { entity_id: "e1", display_name: "Renamed" }),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+    await m3.updateEntity("e1", { display_name: "Renamed" }, "t");
+    const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(url).toBe("/api/v1/entities/e1");
+    expect(init.method).toBe("PATCH");
+    expect(init.body).toBe(JSON.stringify({ display_name: "Renamed" }));
+    expect(new Headers(init.headers).get("X-Tenant-ID")).toBe("t");
+  });
+
+  it("lists entities with type and search filters", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      jsonResponse(200, { items: [], total: 0, limit: 25, offset: 0 }),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+    await m3.listEntities({ entity_type: "WEBSITE", q: "acme", limit: 25 }, "t");
+    const [url] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(url).toBe("/api/v1/entities?entity_type=WEBSITE&q=acme&limit=25");
+  });
+});

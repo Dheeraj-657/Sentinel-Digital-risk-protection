@@ -10,6 +10,11 @@ import { Entities } from "./pages/Entities";
 import { EntityDetail } from "./pages/EntityDetail";
 import { NewAnalysis } from "./pages/NewAnalysis";
 import { AnalysisJob } from "./pages/AnalysisJob";
+import { AnalysisHistory } from "./pages/AnalysisHistory";
+import { ScanNew } from "./pages/ScanNew";
+import { Scans } from "./pages/Scans";
+import { ScanDetail } from "./pages/ScanDetail";
+import { Sources } from "./pages/Sources";
 import { NotFound } from "./pages/NotFound";
 
 export default function App() {
@@ -26,7 +31,12 @@ export default function App() {
             <Route path="/entities" element={<Entities />} />
             <Route path="/entities/:entityId" element={<EntityDetail />} />
             <Route path="/analysis/new" element={<NewAnalysis />} />
+            <Route path="/analysis/history" element={<AnalysisHistory />} />
             <Route path="/analysis/:jobId" element={<AnalysisJob />} />
+            <Route path="/scan/new" element={<ScanNew />} />
+            <Route path="/scans" element={<Scans />} />
+            <Route path="/scans/:scanId" element={<ScanDetail />} />
+            <Route path="/sources" element={<Sources />} />
             <Route path="*" element={<NotFound />} />
           </Routes>
         </AppShell>
