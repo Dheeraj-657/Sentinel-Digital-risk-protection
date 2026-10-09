@@ -1301,3 +1301,12 @@ git commit -m "feat(m1): brand editing + brand-scoped scans"
 ```
 
 <!-- PLAN-CONTINUES -->
+
+## Progress log
+
+- Tasks 1–5 complete — commits 5f8709c (m2), 1e54c15 (m3), 9f6c34f (m1). M2 119, M3 92, M1 tsc + test:brands + test:engine green.
+- Tasks 6–11 complete — commit 804ddcb `feat(console): api layer + scans/sources/history pages`. api.ts surface + types, ScanNew/Scans/ScanDetail, Sources, AnalysisHistory, M1RiskLevelBadge/M1RiskScore/M1ScoreBar, vite proxy ordering, api-mock factory; frontend suite 58 green.
+- Tasks 12–15 complete — commit 74a485e `feat(console): brand/entity workflows, dashboard stats, nav`. BrandFormCard create/edit, BrandDetail edit + brand-scoped scans + threats card, Brands row actions + error footer, Entities search + entity_type filter, EntityDetail edit form (m3.updateEntity), Dashboard GET /api/stats section (recent high-risk scans, top signals, 6th stat card), 7-item nav + mobile settings panel; frontend suite 64 green (6 new console-workflows tests).
+- Task 16 (multi-brand browser E2E) — pending.
+- Task 17 (full suites + production build) — pending.
+- Task 18 (deliverables + final report) — pending.
