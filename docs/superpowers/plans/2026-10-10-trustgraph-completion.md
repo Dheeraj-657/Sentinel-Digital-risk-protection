@@ -72,7 +72,7 @@ Everything below was verified against the working tree at commit d552104 (clean)
 - Consumes: `JobService.list_for_tenant(tenant_id, limit=, offset=, status=) -> tuple[list[AnalysisJob], int]` (backend/app/services/jobs.py:35-59); ORM `AnalysisResult` (`app.models.analysis`) for the job→threat join; helpers `headers(tenant_id)` / `run_analysis(client, tenant_id, brand_id, entity_id)` already in backend/tests/test_api.py:48-63.
 - Produces: `GET /api/v1/analysis?status=&limit=&offset=` → `{"items": [{job_id, status, brand_id, entity_id, created_at, started_at, completed_at, error_code, threat_id}], "total", "limit", "offset"}`. Task 6's `m2.listJobs` and Task 11's AnalysisHistory page consume this.
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 Append to the end of `backend/tests/test_api.py`:
 
@@ -160,7 +160,7 @@ class TestAnalysisListEndpoint:
         assert response.json()["total"] == 0
 ```
 
-- [ ] **Step 2: Run tests to verify they fail**
+- [x] **Step 2: Run tests to verify they fail**
 
 ```bash
 cd backend && .venv/Scripts/python.exe -m pytest tests/test_api.py::TestAnalysisListEndpoint -q --junitxml=.junit.xml; rm -f .junit.xml
@@ -168,7 +168,7 @@ cd backend && .venv/Scripts/python.exe -m pytest tests/test_api.py::TestAnalysis
 
 Expected: 6 failures — `GET /api/v1/analysis` returns **405 Method Not Allowed** today (only `POST ""` exists on that path), so every 200-assertion fails.
 
-- [ ] **Step 3: Add the response schemas**
+- [x] **Step 3: Add the response schemas**
 
 Append to the end of `backend/app/schemas/analysis.py`:
 
@@ -199,7 +199,7 @@ class AnalysisJobListResponse(BaseModel):
     offset: int
 ```
 
-- [ ] **Step 4: Add the list route**
+- [x] **Step 4: Add the list route**
 
 In `backend/app/api/v1/analysis.py`, replace the import block (lines 1-18, up to and including the `router = APIRouter(...)` line is untouched — only the imports above it change):
 
@@ -275,7 +275,7 @@ def list_analysis_jobs(
     )
 ```
 
-- [ ] **Step 5: Run the new tests to verify they pass**
+- [x] **Step 5: Run the new tests to verify they pass**
 
 ```bash
 cd backend && .venv/Scripts/python.exe -m pytest tests/test_api.py::TestAnalysisListEndpoint -q --junitxml=.junit.xml; rm -f .junit.xml
@@ -283,7 +283,7 @@ cd backend && .venv/Scripts/python.exe -m pytest tests/test_api.py::TestAnalysis
 
 Expected: `6 passed`.
 
-- [ ] **Step 6: Run the full M2 suite**
+- [x] **Step 6: Run the full M2 suite**
 
 ```bash
 cd backend && .venv/Scripts/python.exe -m pytest -q --junitxml=.junit.xml && echo SUITE_PASS || echo SUITE_FAIL; rm -f .junit.xml
@@ -291,7 +291,7 @@ cd backend && .venv/Scripts/python.exe -m pytest -q --junitxml=.junit.xml && ech
 
 Expected: `119 passed` (113 existing + 6 new). If anything below 119 passes, something was lost — investigate before committing.
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```bash
 git add backend/app/schemas/analysis.py backend/app/api/v1/analysis.py backend/tests/test_api.py
@@ -309,7 +309,7 @@ git commit -m "feat(m2): analysis history list endpoint"
 - Consumes: `_get_entity(db, tenant, entity_id)` (api.py:104-113 — 404 on missing OR cross-tenant); `_entity_list_item(record)` (api.py:91-101); `normalize_identifiers` (module3/normalization.py); `EntityRecord.updated_at` has `onupdate=utcnow` (module3/models.py:65-67) so any UPDATE auto-bumps it; conftest `make_entity(tenant, **overrides)` defaults to WEBSITE / "Acme Corp Support" / `{"domain": "acme-support.com", "handle": "@acme_help"}`.
 - Produces: `PATCH /api/v1/entities/{entity_id}` with body `{display_name?, identifiers?, attributes?}` → 200 with the EntityListItem shape (same as list items). `None` field = leave unchanged; unknown keys → 422 (`extra="forbid"`). Task 13's EditEntityCard consumes this.
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 Create `module3/tests/test_entity_update.py`:
 
@@ -455,7 +455,7 @@ class TestEntityUpdate:
         assert original.json()["display_name"] == "Acme Corp Support"
 ```
 
-- [ ] **Step 2: Run the new tests to verify they fail**
+- [x] **Step 2: Run the new tests to verify they fail**
 
 ```bash
 cd module3 && ../backend/.venv/Scripts/python.exe -m pytest tests/test_entity_update.py -q
@@ -463,7 +463,7 @@ cd module3 && ../backend/.venv/Scripts/python.exe -m pytest tests/test_entity_up
 
 Expected: all 8 FAIL with `405 Method Not Allowed` (the path exists with GET/POST only, no PATCH route yet).
 
-- [ ] **Step 3: Add the `EntityUpdate` schema**
+- [x] **Step 3: Add the `EntityUpdate` schema**
 
 In `module3/module3/schemas.py`, change the pydantic import:
 
@@ -499,7 +499,7 @@ class EntityUpdate(BaseModel):
 
 (The `field_validator` is required because pydantic does not strip whitespace — `"   "` is length 3 and would otherwise pass `min_length=1`.)
 
-- [ ] **Step 4: Add the PATCH route**
+- [x] **Step 4: Add the PATCH route**
 
 In `module3/module3/api.py`, directly after the `get_entity` route (line 252), add:
 
@@ -527,7 +527,7 @@ def update_entity(
 
 (`updated_at` bumps automatically via `onupdate=utcnow`; whole-dict assignment keeps SQLAlchemy's JSON change detection happy.)
 
-- [ ] **Step 5: Run the new tests to verify they pass**
+- [x] **Step 5: Run the new tests to verify they pass**
 
 ```bash
 cd module3 && ../backend/.venv/Scripts/python.exe -m pytest tests/test_entity_update.py -q
@@ -535,7 +535,7 @@ cd module3 && ../backend/.venv/Scripts/python.exe -m pytest tests/test_entity_up
 
 Expected: `8 passed`.
 
-- [ ] **Step 6: Run the full M3 suite**
+- [x] **Step 6: Run the full M3 suite**
 
 ```bash
 cd module3 && ../backend/.venv/Scripts/python.exe -m pytest -q
@@ -558,7 +558,7 @@ Expected: `79 passed` (71 existing + 8 new), 0 failures. Existing tests must be 
 - Consumes: `normalize_identifiers` (identifiers must be canonical BEFORE the conflict probe — the stored form is canonical); `EntityRecord.identifiers["domain"].as_string()` (SQLAlchemy JSON path comparison; SQLAlchemy renders `json_extract` on SQLite); `AppError(ErrorCode.DUPLICATE_ENTITY, message, http_status=409, details=...)` — same shape as the existing entity-id replay error (api.py:198-203).
 - Produces: `POST /api/v1/entities` now returns **409 DUPLICATE_ENTITY** with `details.existing_entity_id` when the same tenant already has an entity of the **same entity_type** whose normalized `domain` identifier matches. Different type, no domain identifier, or different tenant → still 201. Task 16's browser E2E surfaces this 409 in the console UI.
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 Create `module3/tests/test_entity_dedup.py`:
 
@@ -653,7 +653,7 @@ class TestEntityDedup:
         assert second.json()["details"]["entity_id"] == str(entity_id)
 ```
 
-- [ ] **Step 2: Run the new tests to verify the right ones fail**
+- [x] **Step 2: Run the new tests to verify the right ones fail**
 
 ```bash
 cd module3 && ../backend/.venv/Scripts/python.exe -m pytest tests/test_entity_dedup.py -q
@@ -661,7 +661,7 @@ cd module3 && ../backend/.venv/Scripts/python.exe -m pytest tests/test_entity_de
 
 Expected: `test_same_domain_same_type_conflicts` FAILS (got 201, expected 409); the other 4 PASS (that behavior already exists). `test_exact_id_replay_reports_entity_id` passes against the current entity-id check and must keep passing after the change.
 
-- [ ] **Step 3: Add the conflict probe to `create_entity`**
+- [x] **Step 3: Add the conflict probe to `create_entity`**
 
 In `module3/module3/api.py`, replace the body of `create_entity` from the entity-id check through the `record = EntityRecord(...)` block (lines 196-211) with:
 
@@ -706,7 +706,7 @@ In `module3/module3/api.py`, replace the body of `create_entity` from the entity
 
 Key points: the probe runs on the **normalized** domain (so `ACME-SUPPORT.COM` and `https://www.acme-support.com/login` both collapse to `acme-support.com` before comparison), and the stored record reuses `normalized` instead of calling `normalize_identifiers` twice.
 
-- [ ] **Step 4: Update the three existing tests that now collide**
+- [x] **Step 4: Update the three existing tests that now collide**
 
 These tests create multiple WEBSITE entities sharing the default `acme-support.com` domain — under the new probe `make_entity` 409s. The fix is test **data**, not assertions:
 
@@ -748,7 +748,7 @@ In `module3/tests/test_api.py`, `test_list_scoped_to_entity` (line 327):
 
 (`module3/seed.py` is unaffected — it inserts `EntityRecord` rows directly, not through this route.)
 
-- [ ] **Step 5: Run the new tests to verify they pass**
+- [x] **Step 5: Run the new tests to verify they pass**
 
 ```bash
 cd module3 && ../backend/.venv/Scripts/python.exe -m pytest tests/test_entity_dedup.py -q
@@ -756,7 +756,7 @@ cd module3 && ../backend/.venv/Scripts/python.exe -m pytest tests/test_entity_de
 
 Expected: `5 passed`.
 
-- [ ] **Step 6: Run the full M3 suite**
+- [x] **Step 6: Run the full M3 suite**
 
 ```bash
 cd module3 && ../backend/.venv/Scripts/python.exe -m pytest -q
@@ -778,7 +778,7 @@ Expected: `84 passed` (71 existing + 8 update + 5 dedup), 0 failures. If an unto
 - Consumes: `Annotated` (already imported, api.py:19); `schemas.EntityType` (FastAPI 422s invalid enum values in query params for free); `_entity_list_item`.
 - Produces: `GET /api/v1/entities?entity_type=&q=` — `entity_type` exact-matches the enum value; `q` (max 200 chars) case-insensitively matches `display_name` OR the normalized `domain` OR the normalized `handle` identifier (LIKE `%q%` on `func.lower(...)`). Filters compose with `AND` and apply to both `total` and the returned page. Tasks 9/13 (Sources page, Entities page search box) consume this.
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 Create `module3/tests/test_entity_filters.py`:
 
@@ -900,7 +900,7 @@ class TestTextFilter:
         assert response.json()["total"] == 0
 ```
 
-- [ ] **Step 2: Run the new tests to verify they fail**
+- [x] **Step 2: Run the new tests to verify they fail**
 
 ```bash
 cd module3 && ../backend/.venv/Scripts/python.exe -m pytest tests/test_entity_filters.py -q
@@ -908,7 +908,7 @@ cd module3 && ../backend/.venv/Scripts/python.exe -m pytest tests/test_entity_fi
 
 Expected: the filter tests FAIL (unfiltered results — `total == 3` instead of 1); `test_invalid_type_rejected` may already PASS because FastAPI rejects unknown query values only after the param is declared (it currently isn't, so this one fails with `total == 3` too).
 
-- [ ] **Step 3: Add the filters to `list_entities`**
+- [x] **Step 3: Add the filters to `list_entities`**
 
 In `module3/module3/api.py`, first extend the sqlalchemy import (line 22):
 
@@ -970,7 +970,7 @@ def list_entities(
 
 (`display_name` can be NULL — `func.lower(NULL) LIKE '%x%'` is NULL/unknown, which never satisfies the WHERE, so unnamed entities simply don't match `q`; that is the desired behavior. `q` compares against the **stored canonical** identifiers, which is why `acme_helper` matches the handle stored as `acme_helper`.)
 
-- [ ] **Step 4: Run the new tests to verify they pass**
+- [x] **Step 4: Run the new tests to verify they pass**
 
 ```bash
 cd module3 && ../backend/.venv/Scripts/python.exe -m pytest tests/test_entity_filters.py -q
@@ -978,7 +978,7 @@ cd module3 && ../backend/.venv/Scripts/python.exe -m pytest tests/test_entity_fi
 
 Expected: `8 passed`.
 
-- [ ] **Step 5: Run the full M3 suite**
+- [x] **Step 5: Run the full M3 suite**
 
 ```bash
 cd module3 && ../backend/.venv/Scripts/python.exe -m pytest -q
@@ -986,7 +986,7 @@ cd module3 && ../backend/.venv/Scripts/python.exe -m pytest -q
 
 Expected: `92 passed` (71 existing + 21 new across Tasks 2-4), 0 failures.
 
-- [ ] **Step 6: Commit (M3 phase)**
+- [x] **Step 6: Commit (M3 phase)**
 
 ```bash
 git add module3/module3/api.py module3/module3/schemas.py module3/tests/test_entity_update.py module3/tests/test_entity_dedup.py module3/tests/test_entity_filters.py module3/tests/test_list_endpoints.py module3/tests/test_api.py
