@@ -24,10 +24,29 @@ const ENTITY_TYPES: M3EntityType[] = [
   "OTHER",
 ];
 
+const filterSelect =
+  "rounded border border-line bg-ink px-2 py-1.5 text-xs text-fg focus:border-action/60 focus:outline-none";
+
 export function Entities() {
   const { tenant } = useTenant();
-  const entities = useApi(() => m3.listEntities({ limit: 200 }, tenant), [tenant]);
+  const [query, setQuery] = useState("");
+  const [typeFilter, setTypeFilter] = useState<M3EntityType | "">("");
+  const entities = useApi(
+    () =>
+      m3.listEntities(
+        { entity_type: typeFilter || undefined, q: query || undefined, limit: 200 },
+        tenant,
+      ),
+    [tenant, query, typeFilter],
+  );
   const [formOpen, setFormOpen] = useState(false);
+
+  const hasFilters = query !== "" || typeFilter !== "";
+
+  const resetFilters = () => {
+    setQuery("");
+    setTypeFilter("");
+  };
 
   return (
     <>
@@ -58,6 +77,45 @@ export function Entities() {
               ? `${entities.data.total} entit${entities.data.total === 1 ? "y" : "ies"} in tenant — newest first`
               : undefined
           }
+          actions={
+            <div className="flex flex-wrap items-center gap-2">
+              <form
+                onSubmit={(event) => event.preventDefault()}
+                className="flex items-center gap-2"
+              >
+                <label className="sr-only" htmlFor="entity-search">
+                  Search entities
+                </label>
+                <input
+                  id="entity-search"
+                  type="search"
+                  value={query}
+                  onChange={(event) => setQuery(event.target.value)}
+                  placeholder="Search name or identifier…"
+                  spellCheck={false}
+                  className="w-52 rounded border border-line bg-ink px-2.5 py-1.5 text-xs text-fg placeholder:text-faint focus:border-action/60 focus:outline-none"
+                />
+              </form>
+              <select
+                aria-label="Filter by entity type"
+                value={typeFilter}
+                onChange={(event) => setTypeFilter(event.target.value as M3EntityType | "")}
+                className={filterSelect}
+              >
+                <option value="">All types</option>
+                {ENTITY_TYPES.map((type) => (
+                  <option key={type} value={type}>
+                    {ENTITY_TYPE_LABEL[type]}
+                  </option>
+                ))}
+              </select>
+              {hasFilters ? (
+                <Button variant="ghost" onClick={resetFilters}>
+                  Clear
+                </Button>
+              ) : null}
+            </div>
+          }
         />
         {entities.loading ? (
           <TableSkeleton rows={5} />
@@ -65,12 +123,20 @@ export function Entities() {
           <ErrorState error={entities.error} onRetry={entities.reload} context="entities" />
         ) : !entities.data || entities.data.items.length === 0 ? (
           <EmptyState
-            title="No entities yet"
-            description="Register a discovered entity (website, profile, domain…) and attach evidence to it, then run an analysis."
+            title={hasFilters ? "No entities match the filters" : "No entities yet"}
+            description={
+              hasFilters
+                ? "Adjust or clear the filters to see more results."
+                : "Register a discovered entity (website, profile, domain…) and attach evidence to it, then run an analysis."
+            }
             action={
-              <Button variant="primary" onClick={() => setFormOpen(true)}>
-                Register entity
-              </Button>
+              hasFilters ? (
+                <Button onClick={resetFilters}>Clear filters</Button>
+              ) : (
+                <Button variant="primary" onClick={() => setFormOpen(true)}>
+                  Register entity
+                </Button>
+              )
             }
           />
         ) : (

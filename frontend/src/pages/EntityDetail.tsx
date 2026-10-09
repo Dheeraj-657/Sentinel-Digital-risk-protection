@@ -17,7 +17,7 @@ import {
   StatCard,
 } from "../components/ui";
 import { ThreatTable } from "../components/threat-table";
-import type { M3EvidenceType } from "../lib/types";
+import type { M3Entity, M3EvidenceType } from "../lib/types";
 
 const EVIDENCE_TYPES: M3EvidenceType[] = [
   "IDENTITY_MATCH",
@@ -37,6 +37,7 @@ export function EntityDetail() {
   const sources = useApi(() => m3.listSources({ limit: 200 }, tenant), [tenant]);
   const threats = useApi(() => m2.listThreats({ limit: 200 }, tenant), [tenant]);
   const [formOpen, setFormOpen] = useState(false);
+  const [editOpen, setEditOpen] = useState(false);
 
   if (entity.loading) {
     return (
@@ -79,11 +80,27 @@ export function EntityDetail() {
         title={data.display_name ?? "Entity"}
         description="Discovered entity with its evidence trail and risk-engine verdicts."
         actions={
-          <Link to={`/analysis/new?entity=${encodeURIComponent(entityId)}`}>
-            <Button variant="primary">Run analysis</Button>
-          </Link>
+          <div className="flex flex-wrap items-center gap-2">
+            <Button variant="primary" onClick={() => setEditOpen((open) => !open)}>
+              {editOpen ? "Close editor" : "Edit entity"}
+            </Button>
+            <Link to={`/analysis/new?entity=${encodeURIComponent(entityId)}`}>
+              <Button>Run analysis</Button>
+            </Link>
+          </div>
         }
       />
+
+      {editOpen ? (
+        <EditEntityCard
+          entity={data}
+          onSaved={() => {
+            setEditOpen(false);
+            entity.reload();
+          }}
+          onCancel={() => setEditOpen(false)}
+        />
+      ) : null}
 
       <div className="grid gap-4 sm:grid-cols-3">
         <StatCard label="Evidence items" value={evidenceItems.length} />
@@ -288,6 +305,114 @@ export function EntityDetail() {
 
 const inputClass =
   "w-full rounded border border-line bg-ink px-2.5 py-1.5 text-sm text-fg placeholder:text-faint focus:border-action/60 focus:outline-none";
+
+function EditEntityCard({
+  entity,
+  onSaved,
+  onCancel,
+}: {
+  entity: M3Entity;
+  onSaved: () => void;
+  onCancel: () => void;
+}) {
+  const { tenant } = useTenant();
+  const [displayName, setDisplayName] = useState(entity.display_name ?? "");
+  const [identifiersText, setIdentifiersText] = useState(
+    Object.entries(entity.identifiers)
+      .map(([key, value]) => `${key}: ${value}`)
+      .join("\n"),
+  );
+  const [error, setError] = useState<string | null>(null);
+  const [saving, setSaving] = useState(false);
+
+  const submit = async (event: React.FormEvent) => {
+    event.preventDefault();
+    const trimmedName = displayName.trim();
+    if (!trimmedName) {
+      setError("A display name is required.");
+      return;
+    }
+    const identifiers: Record<string, string> = {};
+    for (const line of identifiersText.split("\n")) {
+      const trimmedLine = line.trim();
+      if (!trimmedLine) continue;
+      const separator = trimmedLine.indexOf(":");
+      const key = separator > 0 ? trimmedLine.slice(0, separator).trim() : "";
+      const value = separator > 0 ? trimmedLine.slice(separator + 1).trim() : "";
+      if (!key || !value) {
+        setError(`Identifier line "${trimmedLine}" must be "key: value".`);
+        return;
+      }
+      identifiers[key] = value;
+    }
+    setSaving(true);
+    setError(null);
+    try {
+      await m3.updateEntity(
+        entity.entity_id,
+        { display_name: trimmedName, identifiers },
+        tenant,
+      );
+      onSaved();
+    } catch (err) {
+      setError(errorMessage(err));
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <Card className="mb-4">
+      <CardHeader
+        title="Edit entity"
+        description="Saving replaces the identifiers wholesale — the evidence store normalizes them (lowercased keys, canonical domains and handles)."
+      />
+      <form onSubmit={submit} className="space-y-4 px-4 py-4 sm:px-5" noValidate>
+        <div className="grid gap-4 sm:grid-cols-2">
+          <div className="space-y-1.5">
+            <label htmlFor="edit-entity-name" className="block text-[11px] font-medium uppercase tracking-widest text-faint">
+              Display name <span className="text-risk-medium">*</span>
+            </label>
+            <input
+              id="edit-entity-name"
+              value={displayName}
+              onChange={(event) => setDisplayName(event.target.value)}
+              className={inputClass}
+              aria-required="true"
+            />
+          </div>
+          <div className="space-y-1.5">
+            <label htmlFor="edit-entity-identifiers" className="block text-[11px] font-medium uppercase tracking-widest text-faint">
+              Identifiers
+            </label>
+            <textarea
+              id="edit-entity-identifiers"
+              value={identifiersText}
+              onChange={(event) => setIdentifiersText(event.target.value)}
+              rows={3}
+              spellCheck={false}
+              placeholder={"domain: support-acme.example\nhandle: @acme_help"}
+              className={cx(inputClass, "resize-y font-mono text-xs")}
+            />
+          </div>
+        </div>
+        {error ? (
+          <p role="alert" className="text-xs text-risk-medium">
+            {error}
+          </p>
+        ) : null}
+        <div className="flex items-center gap-2">
+          <Button variant="primary" type="submit" disabled={saving}>
+            {saving ? "Saving…" : "Save changes"}
+          </Button>
+          <Button type="button" onClick={onCancel}>
+            Cancel
+          </Button>
+        </div>
+      </form>
+    </Card>
+  );
+}
 
 function AttachEvidenceForm({
   entityId,

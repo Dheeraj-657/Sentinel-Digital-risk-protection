@@ -27,8 +27,11 @@ function Mark() {
 const NAV_ITEMS = [
   { to: "/", label: "Overview", end: true },
   { to: "/threats", label: "Threats" },
+  { to: "/scans", label: "Scans" },
   { to: "/entities", label: "Entities" },
   { to: "/brands", label: "Brands" },
+  { to: "/sources", label: "Sources" },
+  { to: "/analysis/history", label: "History" },
 ];
 
 function NavLinks() {
@@ -148,6 +151,8 @@ function TenantControl() {
 }
 
 export function AppShell({ children }: { children: React.ReactNode }) {
+  const [settingsOpen, setSettingsOpen] = useState(false);
+
   return (
     <div className="lg:grid lg:min-h-dvh lg:grid-cols-[232px_1fr]">
       <aside className="sticky top-0 z-20 flex items-center gap-4 border-b border-line bg-ink/95 px-4 py-3 backdrop-blur lg:h-dvh lg:flex-col lg:items-stretch lg:border-r lg:border-b-0 lg:py-6">
@@ -173,7 +178,27 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             <ServiceStatus />
           </div>
         </div>
+        <button
+          type="button"
+          onClick={() => setSettingsOpen((open) => !open)}
+          aria-expanded={settingsOpen}
+          aria-controls="mobile-panel"
+          className="rounded border border-line bg-raised px-2.5 py-1.5 text-[11px] font-medium text-muted transition hover:border-action/60 hover:text-fg lg:hidden"
+        >
+          {settingsOpen ? "Close settings" : "Settings"}
+        </button>
       </aside>
+      {settingsOpen ? (
+        <div
+          id="mobile-panel"
+          className="sticky top-[3.25rem] z-10 border-b border-line bg-ink/95 px-4 py-3 backdrop-blur lg:hidden"
+        >
+          <div className="mx-auto grid max-w-3xl gap-4 sm:grid-cols-2">
+            <TenantControl />
+            <ServiceStatus />
+          </div>
+        </div>
+      ) : null}
       <main className="min-w-0 px-4 py-6 sm:px-6 lg:px-10 lg:py-9">
         <div className="mb-4 flex items-center justify-end lg:hidden">
           <Link
