@@ -1,5 +1,5 @@
 import { Link } from "react-router-dom";
-import { cx, formatDateTime, RISK_LEVEL_CLASS } from "../lib/format";
+import { cx, formatDateTime, CLASSIFICATION_LABEL, RISK_LEVEL_CLASS } from "../lib/format";
 import { useEnrichment } from "../lib/hooks";
 import type { ThreatSummary } from "../lib/types";
 import { Badge } from "./ui";
@@ -70,7 +70,7 @@ export function ThreatTable({
               </td>
               <td className="px-4 py-3">
                 <Link to={`/threats/${threat.threat_id}`} className="text-fg hover:text-action">
-                  {threat.classification.replace(/_/g, " ").toLowerCase()}
+                  {CLASSIFICATION_LABEL[threat.classification] ?? threat.classification}
                 </Link>
               </td>
               <td className="max-w-56 truncate px-4 py-3">
