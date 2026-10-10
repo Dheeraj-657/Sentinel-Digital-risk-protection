@@ -21,6 +21,7 @@ import { NotFound } from "./pages/NotFound";
 import { Investigation } from "./pages/Investigation";
 import { Investigations } from "./pages/Investigations";
 import { ThreatGraph } from "./pages/ThreatGraph";
+import { Analyst } from "./pages/Analyst";
 import { DiscoveryCenter } from "./pages/DiscoveryCenter";
 
 export default function App() {
@@ -45,6 +46,7 @@ export default function App() {
               <Route path="/investigate" element={<Investigations />} />
               <Route path="/investigate/:entityId" element={<Investigation />} />
               <Route path="/graph" element={<ThreatGraph />} />
+              <Route path="/analyst" element={<Analyst />} />
               <Route path="/scan/new" element={<ScanNew />} />
               <Route path="/scans" element={<Scans />} />
               <Route path="/scans/:scanId" element={<ScanDetail />} />

@@ -783,14 +783,14 @@ function ClusterSummary({ threatIds, tenant }: { threatIds: string[]; tenant: st
                   part.kind === "text" ? (
                     <span key={j}>{part.text}</span>
                   ) : part.kind === "evidence" ? (
-                    <span key={j} title={`Evidence ${part.id}`} className="mx-0.5 rounded border border-evidence/40 px-1 font-mono text-[10px] text-evidence">
+                    <span key={j} title={`Evidence ${part.id}`} className="mx-0.5 inline-block indent-0 rounded border border-evidence/40 px-1 font-mono text-[10px] text-evidence">
                       ev {shortId(part.id)}
                     </span>
                   ) : (
                     <Link
                       key={j}
                       to={part.kind === "threat" ? `/threats/${part.id}` : `/investigate/${part.id}`}
-                      className="mx-0.5 rounded border border-line px-1 font-mono text-[10px] text-muted hover:border-action/60 hover:text-fg"
+                      className="mx-0.5 inline-block indent-0 rounded border border-line px-1 font-mono text-[10px] text-muted hover:border-action/60 hover:text-fg"
                     >
                       {part.kind} {shortId(part.id)}
                     </Link>

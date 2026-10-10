@@ -13,6 +13,7 @@ import { Investigation } from "./Investigation";
 import { Investigations } from "./Investigations";
 import { ThreatGraph } from "./ThreatGraph";
 import { DiscoveryCenter } from "./DiscoveryCenter";
+import { Analyst } from "./Analyst";
 import { AppShell } from "../components/layout";
 import { ApiError, m1, m2, m3, m4 } from "../lib/api";
 import { DEFAULT_TENANT, TenantProvider } from "../lib/tenant";
@@ -302,6 +303,49 @@ describe("Investigation workspace", () => {
     renderAt(`/investigate/${ENTITY_A}?tab=risk`, workspaceRoutes);
     expect(await screen.findByText("No risk breakdown yet")).toBeTruthy();
     expect(m2.getThreat).not.toHaveBeenCalled();
+  });
+});
+
+describe("AI Security Analyst page", () => {
+  const routes = <Route path="/analyst" element={<Analyst />} />;
+  const pick = async (id: string, value: string) => {
+    const el = (await screen.findByLabelText(id)) as HTMLSelectElement;
+    fireEvent.change(el, { target: { value } });
+  };
+
+  it("compares any two stored reports", async () => {
+    vi.mocked(m4.askAnalyst).mockResolvedValue(analystAnswer({ intent: "compare" }));
+    renderAt("/analyst?mode=compare", routes);
+    await pick("First report", THREAT_A);
+    await pick("Second report", THREAT_B);
+    fireEvent.click(screen.getByRole("button", { name: "Ask the analyst" }));
+    expect(await screen.findByText("Evidence summary (template)")).toBeTruthy();
+    expect(vi.mocked(m4.askAnalyst).mock.calls[0][0]).toEqual({
+      question: "Compare these two reports.",
+      threat_id: THREAT_A,
+      compare_threat_id: THREAT_B,
+    });
+  });
+
+  it("summarizes a potential campaign from the seed's exact-match links only", async () => {
+    vi.mocked(m4.askAnalyst).mockResolvedValue(analystAnswer({ intent: "campaign" }));
+    renderAt("/analyst?mode=campaign", routes);
+    await pick("Seed report", THREAT_A);
+    const box = (await screen.findByRole("checkbox", { name: /Acme Help App \(SYNTHETIC\)/ })) as HTMLInputElement;
+    expect(box.checked).toBe(true);
+    fireEvent.click(screen.getByRole("button", { name: "Ask the analyst" }));
+    await screen.findByText("Evidence summary (template)");
+    expect(vi.mocked(m4.askAnalyst).mock.calls[0][0]).toEqual(
+      expect.objectContaining({ threat_id: THREAT_A, cluster_threat_ids: [THREAT_A, THREAT_B] }),
+    );
+  });
+
+  it("says when nothing is linked instead of inventing members", async () => {
+    vi.mocked(m2.getRelated).mockResolvedValue({ threat_id: THREAT_A, total: 0, warnings: [], items: [] });
+    renderAt("/analyst?mode=campaign", routes);
+    await pick("Seed report", THREAT_A);
+    expect(await screen.findByText(/links no other entity to this report/)).toBeTruthy();
+    expect((screen.getByRole("button", { name: "Ask the analyst" }) as HTMLButtonElement).disabled).toBe(true);
   });
 });
 

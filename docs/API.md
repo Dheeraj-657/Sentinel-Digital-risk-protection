@@ -178,17 +178,24 @@ Isolated package `backend/app/module4/`; requires `X-Tenant-ID` like every Modul
   "question": "Why was this entity classified as medium risk?",
   "threat_id": "7a250d38-…",          // threat_id and/or entity_id (entity → its highest verdict)
   "entity_id": "161a6131-…",
-  "compare_threat_id": null,           // optional second verdict
+  "compare_threat_id": null,           // optional second verdict ("Compare two reports")
+  "cluster_threat_ids": [],            // optional ≤ 12 verdicts → "potential campaign" summary
   "history": [{"role": "user", "content": "…"}]   // ≤ 8 turns, last 6 forwarded
 }
 ```
+
+`cluster_threat_ids` (or a question mentioning a campaign/cluster) produces intent `campaign`:
+members are grouped **only** through the stored exact-match relations between them; members
+with no shared identifier are named as not linked; the answer always says it is a candidate
+grouping, not a confirmed campaign. Every member is tenant-checked (one foreign id → 404).
+`compare_threat_id` and `cluster_threat_ids` are mutually exclusive (422).
 
 Response:
 
 ```json
 {
   "answer": "… rated MEDIUM risk … [threat:7a250d38-…] … [ev:01ca6c91-…]",
-  "intent": "why",                      // why | evidence | relations | next_steps | compare | summary
+  "intent": "why",                      // why | evidence | relations | next_steps | compare | campaign | summary
   "source": "GROQ",                     // or TEMPLATE (no key, provider failure, or grounding rejection)
   "model": "openai/gpt-oss-120b",
   "citations": {"evidence_ids": [], "threat_ids": [], "entity_ids": []},
@@ -198,7 +205,7 @@ Response:
 }
 ```
 
-Errors: `400 TENANT_REQUIRED`, `404 NOT_FOUND` (unknown or cross-tenant threat/entity), `422 VALIDATION_ERROR` (no subject, or threat not belonging to entity). Grounding rules: see [MODULE4.md](MODULE4.md#2-backend-change-isolated-additive).
+Errors: `400 TENANT_REQUIRED`, `404 NOT_FOUND` (unknown or cross-tenant threat/entity), `422 VALIDATION_ERROR` (no subject, or threat not belonging to entity). Grounding rules: see [MODULE4.md](MODULE4.md#2-backend-change-isolated-additive); a model answer that asserts a confirmed campaign is also rejected (negated wording such as "not a confirmed campaign" is allowed).
 
 ### `GET /api/v1/investigation/analyst/status`
 
@@ -259,7 +266,8 @@ Errors: `400 TENANT_REQUIRED`, `404 NOT_FOUND` (unknown or cross-tenant threat/e
   BEHAVIORAL_EVENT | REPUTATION_INTEL | RELATIONSHIP_LINK`) and at least one of
   `text` / `url` / `image_hash`; optional `metadata` map (the risk engine reads keys
   such as `days_since_registration`, `whois_privacy`, `recent_account_creation`,
-  `brand_mimicry_in_bio`).
+  `brand_mimicry_in_bio`). `url`, when present, must be an absolute `http(s)://` URL
+  (≤ 2048 chars); `javascript:`, `data:`, `file:` and scheme-relative values → **422**.
 
 ### Sources (provenance)
 
@@ -272,6 +280,13 @@ Errors: `400 TENANT_REQUIRED`, `404 NOT_FOUND` (unknown or cross-tenant threat/e
 - `GET /healthz`.
 
 ---
+
+## Console dev proxy (:5173)
+
+The console calls all three services through Vite's proxy (one origin, no CORS). When an
+upstream module is not running the proxy answers **502** with
+`{"error_code": "SERVICE_UNAVAILABLE", "message": "<Service> is not reachable at <url> …"}`
+so the UI can say which module is down.
 
 ## Module 1 — Sentinel DRP (:3000)
 
@@ -318,7 +333,12 @@ has no tenancy model — these routes are unauthenticated in local dev.
   `{"entityType": "PROFILE|WEBSITE|DOMAIN|APP", "input": "...", "brandId": "..." or
   "brand": {...}, "claimedDeveloper": "..."}` (input 3–2048 chars; rate-limited to 12
   scans/min per client IP → `429 RATE_LIMITED` with `retryAfterSec`). Returns **201**
-  with the full `AnalysisReport` plus its `id`.
+  with the full `AnalysisReport` plus its `id`. Targets on loopback, private, link-local
+  (incl. `169.254.169.254`), CGNAT, multicast or reserved addresses — in any spelling
+  (`0x7f000001`, `2130706433`, `[::ffff:7f00:1]`, `localhost`, `*.internal`) — are
+  rejected with **400** `INVALID_ENTITY`. In `INTEL_MODE=live` every fetch hop is
+  re-validated (http/https only, no credentials, pinned DNS answer; see
+  `src/lib/engine/net-guard.ts`).
 - `GET /api/scans?type=&level=&q=&target=&brand=&limit=&cursor=` → scan history,
   `{items, nextCursor, total}`. `type` (`PROFILE|WEBSITE|DOMAIN|APP`), `level`
   (`VERY_LOW|LOW|MEDIUM|HIGH|CRITICAL`), `q` (≤200), `target` (≤300), `brand` (cuid —

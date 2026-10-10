@@ -79,7 +79,13 @@ ff90d917/
 ├── backend/           Risk engine (Module 2) — FastAPI app + Alembic + tests
 ├── module3/           Entity & evidence (Module 3) — FastAPI app + Alembic + tests
 ├── frontend/          TRUSTGRAPH console — Vite + React + TypeScript + Vitest
+├── scripts/
+│   ├── trustgraph.mjs  one-command launcher: setup | dev | status | test (no dependencies)
+│   └── e2e-smoke.mjs   cross-module end-to-end checks against the running stack
+├── package.json       root scripts: npm run setup / dev / status / test / e2e
+├── start-trustgraph.ps1  Windows alternative: one PowerShell window per service
 ├── docs/
+│   ├── INTEGRATION.md  Integration, debugging & hardening report (this release)
 │   ├── API.md         API reference for all three modules + risk-scoring output
 │   ├── TESTING.md     Test/build report: exact commands and results
 │   ├── EVALUATION.md  Discovery evaluation: how to run, recorded live run, status categories
@@ -101,7 +107,36 @@ access is needed once for `npm install` / `pip install`.
 
 ---
 
-## Quick start (Windows PowerShell)
+## Quick start — one command (Windows, macOS, Linux)
+
+Requires Node 20+ and Python 3.11+ on PATH. From the repository root:
+
+```bash
+npm run setup     # once: installs all four modules, creates the 3 SQLite DBs, seeds demo data,
+                  #       copies .env.example → .env where missing (never overwrites)
+npm run dev       # starts Module 1 (:3000), Module 3 (:8001), Module 2 (:8000) and the console (:5173)
+```
+
+`npm run dev` prints each service's log with a `[m1] [m2] [m3] [ui]` prefix, waits until all
+four answer their health checks and then prints **http://localhost:5173**. Ctrl+C stops all
+four. Other commands:
+
+| Command | What it does |
+|---|---|
+| `npm run status` | health of the four services |
+| `npm test` | every suite: backend + Module 3 pytest, Module 1 typecheck/engine/SSRF/brand checks, console typecheck + vitest |
+| `npm run e2e` | 20 cross-module end-to-end checks against the running stack (creates entities labelled `E2E SYNTHETIC`) |
+
+To enable AI explanations, put `GROQ_API_KEY=...` in `module1/.env` (scan explanations) and
+`backend/.env` (AI Security Analyst). Without a key both fall back to deterministic,
+clearly labelled template answers.
+
+> Windows: keep the project in a path without `&`, `%`, `^` or `!` (npm cannot run scripts
+> from such paths); `npm run setup` checks this and tells you.
+
+---
+
+## Manual start, one service per terminal (alternative)
 
 Run each block in a **separate PowerShell window**. Startup order matters only for
 Modules 2/3 needing to be up before you run an analysis; health checks are included.
@@ -309,7 +344,8 @@ Everything below was executed end-to-end through the running UI before submissio
 2. **Search** (`/` key): find an entity by name, domain, handle or package; Enter opens its investigation.
 3. **Investigation workspace** (`/investigate/{entityId}`): verdict per brand, brand reference, evidence (expandable, provenance), risk breakdown, exact-match connections, history. Ask the **AI Security Analyst** "Why was this entity classified as medium risk?"; click an `ev …` citation to jump to that evidence.
 4. **Threat graph** (`/graph`): zoom, pan, fit, filter; select a node to open its investigation or an edge to see the shared value and evidence; **Table** view as the accessible alternative. Linked clusters are labelled leads; campaign detection is not implemented in the backend.
-5. **Discovery** (`/discovery`): start discovery for a brand, see per-provider status, and filter entities by collection source and analysis status.
+5. **Discovery** (`/discovery`): paste any URL, profile or app package into **Analyze a URL, profile or app** (type auto-detected; runs the Module 1 engine and opens its report), start discovery for a brand, see per-provider status, and filter entities by collection source and analysis status.
+6. **Campaigns and comparisons**: in the workspace analyst, **Summarize a potential campaign** (the verdict plus every verdict the engine links to it by an exact shared identifier) and **Compare these two reports**; in the threat graph, **Summarize potential campaign** on any linked cluster. Answers say which members are linked by what, which are not linked, and never call a grouping a confirmed campaign.
 
 Full report, file list, workflow results and data-honesty table: [docs/MODULE4.md](docs/MODULE4.md).
 
@@ -424,14 +460,16 @@ Run from each module's directory; full commands and captured output are in
 
 | Suite | Command | Result |
 |---|---|---|
-| Frontend unit tests | `npm run test` | **103/103 passed** (incl. 20 Module 4 tests) |
+| **Everything** | `npm test` (repo root) | all 7 suites below pass |
+| End-to-end (live stack) | `npm run e2e` | **20/20 checks** (E2E 1–6); E2E 7 failure handling in docs/INTEGRATION.md |
+| Frontend unit tests | `npm run test` | **123/123 passed** |
 | Frontend types | `npm run typecheck` | clean (TS 5.9 strict) |
 | Frontend build | `npm run build` | ✓ (typecheck + production bundle) |
-| Module 2 risk engine + Module 4 analyst | `python -m pytest` | **169/169 passed** (incl. 21 analyst grounding/isolation tests) |
-| Module 3 evidence store | `python -m pytest` | **88 passed, 1 skipped** |
+| Module 2 risk engine + Module 4 analyst | `python -m pytest` | **177/177 passed** (incl. 29 analyst grounding/isolation/campaign tests) |
+| Module 3 evidence store | `python -m pytest` | **89 passed, 1 skipped** |
 | Module 1 types | `npm run typecheck` | clean |
 | Module 1 brand API checks | `npm run test:brands` | all checks passed |
-| Module 1 engine self-check | `npm run test:engine` | all checks passed |
+| Module 1 engine + SSRF + missing-intel checks | `npm run test:engine` | all 97 checks passed |
 
 ## Known limitations
 
@@ -450,9 +488,21 @@ Run from each module's directory; full commands and captured output are in
 - **Single-node SQLite, in-process workers.** Right for the scope; swap the DATABASE_URLs
   to PostgreSQL and `TRUSTGRAPH_WORKER_MODE` for a server deployment.
 - **Console is demo-tenant oriented.** One switchable tenant id in the UI; no auth.
+  The `X-Tenant-ID` header is trusted as sent — put an authenticating gateway in front
+  before exposing the services beyond localhost.
+- **Combo-squat domains in Module 2.** Module 2's domain factor compares whole registrable
+  domains by character n-grams, so `brand-secure-xyz.example` stays below its 0.4
+  similarity threshold and only registration-age / WHOIS signals count. Module 1's engine
+  does flag brand-embedding names. Scoring was deliberately left unchanged.
+- **Campaigns are candidate groupings.** The analyst and graph group verdicts only through
+  exact shared identifiers the engine stored; there is no campaign-detection model.
+- **Groq verified against a local stand-in.** The analyst's Groq path (accept, reject
+  invented numbers, reject "confirmed campaign") was exercised against an
+  OpenAI-compatible mock because api.groq.com is unreachable from the build sandbox.
 
 ## Documentation index
 
+- [docs/INTEGRATION.md](docs/INTEGRATION.md) — integration, debugging & hardening report: every defect found and fixed, files changed, E2E 1–7 results, problem-statement coverage.
 - [docs/MODULE4.md](docs/MODULE4.md) — Module 4 report: features, backend boundary, tests, workflow verification, real vs mock.
 - [docs/API.md](docs/API.md) — every endpoint (Modules 1/2/3), request/response shapes,
   error semantics, and a field-by-field guide to the risk-scoring output.

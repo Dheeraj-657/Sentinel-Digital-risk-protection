@@ -12,7 +12,7 @@ export interface CompareOption {
   label: string;
 }
 
-interface Message {
+export interface Message {
   id: number;
   role: "user" | "assistant";
   text: string;
@@ -306,7 +306,7 @@ export function AnalystPanel({
   );
 }
 
-function AnswerBubble({ message, onCiteEvidence }: { message: Message; onCiteEvidence: (id: string) => void }) {
+export function AnswerBubble({ message, onCiteEvidence }: { message: Message; onCiteEvidence: (id: string) => void }) {
   const response = message.response!;
   const groq = response.source === "GROQ";
   const [showContext, setShowContext] = useState(false);
@@ -332,7 +332,7 @@ function AnswerBubble({ message, onCiteEvidence }: { message: Message; onCiteEvi
                     key={j}
                     type="button"
                     onClick={() => onCiteEvidence(part.id)}
-                    className="mx-0.5 inline-flex items-center rounded border border-evidence/40 bg-evidence/10 px-1 font-mono text-[10px] text-evidence align-middle hover:border-evidence"
+                    className="mx-0.5 inline-flex items-center indent-0 rounded border border-evidence/40 bg-evidence/10 px-1 font-mono text-[10px] text-evidence align-middle hover:border-evidence"
                     title={`Show evidence ${part.id}`}
                   >
                     ev {shortId(part.id)}
@@ -341,7 +341,7 @@ function AnswerBubble({ message, onCiteEvidence }: { message: Message; onCiteEvi
                   <Link
                     key={j}
                     to={part.kind === "threat" ? `/threats/${part.id}` : `/investigate/${part.id}`}
-                    className="mx-0.5 inline-flex items-center rounded border border-line bg-white/[0.04] px-1 font-mono text-[10px] text-muted align-middle hover:border-action/60 hover:text-fg"
+                    className="mx-0.5 inline-flex items-center indent-0 rounded border border-line bg-white/[0.04] px-1 font-mono text-[10px] text-muted align-middle hover:border-action/60 hover:text-fg"
                     title={`Open ${part.kind} ${part.id}`}
                   >
                     {part.kind} {shortId(part.id)}

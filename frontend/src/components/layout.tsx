@@ -34,22 +34,23 @@ const NAV_GROUPS: { label: string; items: NavItem[] }[] = [
     label: "Monitor",
     items: [
       { to: "/", label: "Overview", end: true, icon: "M4 13h6V4H4zm10 7h6v-9h-6zM4 20h6v-4H4zm10-11h6V4h-6z" },
-      { to: "/graph", label: "Threat graph", icon: "M6 6h.01M18 6h.01M12 18h.01M7.5 7.2l3.6 9.3M16.5 7.2l-3.6 9.3M8 6h8" },
+      { to: "/graph", label: "Threat graph & campaigns", icon: "M6 6h.01M18 6h.01M12 18h.01M7.5 7.2l3.6 9.3M16.5 7.2l-3.6 9.3M8 6h8" },
     ],
   },
   {
     label: "Investigate",
     items: [
       { to: "/investigate", label: "Investigations", icon: "M11 4a7 7 0 1 0 4.4 12.4L20 21M8 11h6M11 8v6" },
-      { to: "/threats", label: "Threats", icon: "M12 3 3 19h18L12 3zm0 6v4m0 3h.01" },
+      { to: "/analyst", label: "AI Security Analyst", icon: "M12 3l1.9 4.6L18.5 9l-4.6 1.9L12 15.5l-1.9-4.6L5.5 9l4.6-1.4L12 3zM18 15l.9 2.1L21 18l-2.1.9L18 21l-.9-2.1L15 18l2.1-.9L18 15z" },
+      { to: "/threats", label: "Risk reports", icon: "M12 3 3 19h18L12 3zm0 6v4m0 3h.01" },
       { to: "/entities", label: "Entities", icon: "M4 7h16M4 12h16M4 17h10" },
     ],
   },
   {
     label: "Intelligence",
     items: [
-      { to: "/brands", label: "Brands", icon: "M12 3 4 6.5v5c0 4.6 3.4 8.4 8 9.5 4.6-1.1 8-4.9 8-9.5v-5L12 3z" },
-      { to: "/discovery", label: "Discovery", icon: "M3 12h3m12 0h3M12 3v3m0 12v3M12 8a4 4 0 1 0 0 8 4 4 0 0 0 0-8z" },
+      { to: "/brands", label: "Brand intelligence", icon: "M12 3 4 6.5v5c0 4.6 3.4 8.4 8 9.5 4.6-1.1 8-4.9 8-9.5v-5L12 3z" },
+      { to: "/discovery", label: "Discovery center", icon: "M3 12h3m12 0h3M12 3v3m0 12v3M12 8a4 4 0 1 0 0 8 4 4 0 0 0 0-8z" },
       { to: "/sources", label: "Sources", icon: "M5 4h14v4H5zM5 10h14v4H5zM5 16h14v4H5z" },
     ],
   },
