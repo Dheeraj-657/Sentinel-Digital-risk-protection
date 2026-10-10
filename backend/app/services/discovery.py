@@ -468,7 +468,9 @@ class DiscoveryExecutor:
             return DiscoveryJobStatus.COMPLETED
         if statuses & SUCCESS_STATUSES and statuses & FAILURE_STATUSES:
             return DiscoveryJobStatus.PARTIAL
-        if statuses <= FAILURE_STATUSES:
+        if statuses & FAILURE_STATUSES:
+            # Any hard failure with zero successful providers is a failed run —
+            # never a green COMPLETED. Unconfigured providers don't soften it.
             return DiscoveryJobStatus.FAILED
         return DiscoveryJobStatus.COMPLETED
 

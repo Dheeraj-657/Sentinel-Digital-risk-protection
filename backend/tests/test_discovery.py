@@ -386,6 +386,34 @@ class TestDiscoveryPipeline:
         assert body["provider_outcomes"][0]["status"] == "RATE_LIMITED"
         assert body["error_code"] == "INTEGRATION_UNAVAILABLE"
 
+    def test_failed_provider_with_unconfigured_peer_is_failed_not_completed(
+        self, client, tenant_id, brand_id
+    ):
+        """crt.sh down + search unconfigured is a failed run — COMPLETED would
+        read as fabricated success for a run that observed nothing."""
+        client.discovery_providers.extend(
+            [
+                SearchApiProvider(api_key=None),  # unconfigured peer
+                MockDiscoveryProvider(
+                    "certificate_transparency",
+                    error=DiscoveryProviderError("FAILED", "crt.sh returned HTTP 502"),
+                ),
+            ]
+        )
+        response = client.post(
+            f"{api(client)}/discovery",
+            json={"brand_id": str(brand_id)},
+            headers=headers(tenant_id),
+        )
+        body = response.json()
+        assert body["status"] == "FAILED"
+        outcomes = {o["provider"]: o for o in body["provider_outcomes"]}
+        assert outcomes["certificate_transparency"]["status"] == "FAILED"
+        assert outcomes["certificate_transparency"]["error"] == "crt.sh returned HTTP 502"
+        assert outcomes["web_search"]["status"] == "UNCONFIGURED"
+        assert body["candidates"] == []
+        assert client.module3.evidence == {}
+
     def test_missing_credentials_reported_unconfigured_nothing_fabricated(
         self, client, tenant_id, brand_id
     ):
