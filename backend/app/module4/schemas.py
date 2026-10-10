@@ -22,12 +22,22 @@ class AnalystRequest(BaseModel):
     compare_threat_id: uuid.UUID | None = Field(
         default=None, description="Optional second threat for comparison questions."
     )
+    cluster_threat_ids: list[uuid.UUID] = Field(
+        default_factory=list,
+        max_length=12,
+        description=(
+            "Optional set of threats to summarise as a potential campaign. Members are "
+            "grouped only by exact shared identifiers the risk engine recorded."
+        ),
+    )
     history: list[AnalystTurn] = Field(default_factory=list, max_length=8)
 
     @model_validator(mode="after")
     def _needs_subject(self) -> "AnalystRequest":
-        if self.threat_id is None and self.entity_id is None:
-            raise ValueError("Provide threat_id or entity_id so the analyst has a subject.")
+        if self.threat_id is None and self.entity_id is None and not self.cluster_threat_ids:
+            raise ValueError("Provide threat_id, entity_id or cluster_threat_ids so the analyst has a subject.")
+        if self.cluster_threat_ids and self.compare_threat_id is not None:
+            raise ValueError("Use either compare_threat_id or cluster_threat_ids, not both.")
         return self
 
 

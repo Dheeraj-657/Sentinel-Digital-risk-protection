@@ -482,7 +482,7 @@ export interface RelatedThreatsResponse {
 
 // ---------- Module 4 (AI Security Analyst, backend/app/module4) ----------
 
-export type AnalystIntent = "compare" | "relations" | "evidence" | "next_steps" | "why" | "summary";
+export type AnalystIntent = "campaign" | "compare" | "relations" | "evidence" | "next_steps" | "why" | "summary";
 
 export interface AnalystTurn {
   role: "user" | "assistant";
@@ -494,6 +494,8 @@ export interface AnalystRequest {
   threat_id?: string | null;
   entity_id?: string | null;
   compare_threat_id?: string | null;
+  /** Summarise these verdicts as a potential campaign (exact shared identifiers only). */
+  cluster_threat_ids?: string[];
   history?: AnalystTurn[];
 }
 

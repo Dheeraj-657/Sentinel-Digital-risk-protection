@@ -5,6 +5,7 @@
  */
 import { promises as dns } from "node:dns";
 import net from "node:net";
+import { guardedRequest } from "../../net-guard";
 import type { IntelProvider } from "../../types";
 import type { DomainIntelData, WebContentData } from "../contracts";
 import { SCAM_PHRASES } from "../../lexicon";
@@ -82,42 +83,8 @@ export const rdapDomainProvider: IntelProvider<DomainIntelData> = {
 
 /* ---------------- HTTP redirect tracer / page inspector ---------------- */
 
-function isPrivateIp(ip: string): boolean {
-  if (net.isIPv6(ip)) {
-    const v = ip.toLowerCase();
-    return v === "::1" || v.startsWith("fc") || v.startsWith("fd") || v.startsWith("fe80") || v.startsWith("::ffff:127.");
-  }
-  const [a, b] = ip.split(".").map(Number);
-  return (
-    a === 10 || a === 127 || a === 0 || (a === 169 && b === 254) || (a === 172 && b >= 16 && b <= 31) ||
-    (a === 192 && b === 168) || (a === 100 && b >= 64 && b <= 127) || a >= 224
-  );
-}
-
-/** SSRF guard: refuse to connect to private / loopback / link-local addresses. */
-async function assertPublicHost(host: string) {
-  const addrs = net.isIP(host) ? [{ address: host }] : await dns.lookup(host, { all: true });
-  if (!addrs.length) throw new Error(`Could not resolve ${host}`);
-  if (addrs.some((a) => isPrivateIp(a.address))) throw new Error(`Refusing to fetch private address for ${host}`);
-}
-
 const MAX_HOPS = 6;
 const MAX_BYTES = 512 * 1024;
-
-async function readCapped(res: Response): Promise<string> {
-  if (!res.body) return "";
-  const reader = res.body.getReader();
-  const chunks: Uint8Array[] = [];
-  let total = 0;
-  while (total < MAX_BYTES) {
-    const { done, value } = await reader.read();
-    if (done) break;
-    chunks.push(value);
-    total += value.byteLength;
-  }
-  reader.cancel().catch(() => {});
-  return new TextDecoder("utf-8", { fatal: false }).decode(Buffer.concat(chunks.map((c) => Buffer.from(c))));
-}
 
 export const httpWebContentProvider: IntelProvider<WebContentData> = {
   id: "live.http",
@@ -128,31 +95,21 @@ export const httpWebContentProvider: IntelProvider<WebContentData> = {
   timeoutMs: 9000,
   supports: (e) => e.type === "WEBSITE",
   async collect({ entity, brand, signal }) {
-    const chain: string[] = [];
-    let url = entity.url!;
-    let res: Response | null = null;
-    let metaRefresh = false;
-    for (let hop = 0; hop < MAX_HOPS; hop++) {
-      const u = new URL(url);
-      await assertPublicHost(u.hostname);
-      chain.push(url);
-      res = await fetch(url, {
-        redirect: "manual",
-        signal,
-        headers: { "user-agent": "Mozilla/5.0 (compatible; SentinelDRP/1.0; +risk-analysis)", accept: "text/html,*/*" },
-      });
-      const loc = res.headers.get("location");
-      if (res.status >= 300 && res.status < 400 && loc) {
-        url = new URL(loc, url).toString();
-        continue;
-      }
-      break;
-    }
-    if (!res) return { status: "NO_DATA", data: null, message: "No response" };
-
-    const html = (res.headers.get("content-type") ?? "").includes("html") ? await readCapped(res) : "";
+    // SSRF-guarded: http(s) only, every hop validated, socket pinned to the
+    // validated public address (see net-guard.ts). Blocked destinations throw
+    // and surface as a provider ERROR — never as "no risk found".
+    const res = await guardedRequest(entity.url!, {
+      signal,
+      maxHops: MAX_HOPS,
+      maxBytes: MAX_BYTES,
+      timeoutMs: 8000,
+      headers: { "user-agent": "Mozilla/5.0 (compatible; SentinelDRP/1.0; +risk-analysis)", accept: "text/html,*/*" },
+      readBody: (ct) => ct.includes("html"),
+    });
+    const chain = res.chain;
+    const html = res.body;
     const refresh = html.match(/<meta[^>]+http-equiv=["']?refresh["']?[^>]*content=["'][^"']*url=([^"'>\s]+)/i);
-    if (refresh) metaRefresh = true;
+    const metaRefresh = Boolean(refresh);
 
     const text = html.replace(/<script[\s\S]*?<\/script>|<style[\s\S]*?<\/style>/gi, " ").replace(/<[^>]+>/g, " ");
     const lower = text.toLowerCase();

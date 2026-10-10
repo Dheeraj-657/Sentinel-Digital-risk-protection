@@ -30,6 +30,7 @@ from app.services.threat_service import ThreatService
 MAX_EVIDENCE_PER_ENTITY = 25
 MAX_TEXT_CHARS = 280
 MAX_THREATS_PER_ENTITY = 6
+MAX_CLUSTER_THREATS = 12
 
 FACTOR_LABELS = {
     FactorType.IDENTITY_SIMILARITY.value: "identity similarity",
@@ -273,9 +274,19 @@ class ContextBuilder:
         threat_id: uuid.UUID | None,
         entity_id: uuid.UUID | None,
         compare_threat_id: uuid.UUID | None,
+        cluster_threat_ids: list[uuid.UUID] | None = None,
     ) -> AnalystContext:
         missing: list[str] = []
         subjects: list[Subject] = []
+
+        if cluster_threat_ids:
+            ordered = list(dict.fromkeys(([threat_id] if threat_id else []) + list(cluster_threat_ids)))
+            for tid in ordered[:MAX_CLUSTER_THREATS]:
+                # Every member is tenant-checked; one foreign/unknown id 404s the request.
+                subjects.append(self._subject_for_threat(self._get_threat(tid), missing))
+            if len(ordered) > MAX_CLUSTER_THREATS:
+                missing.append(f"Only the first {MAX_CLUSTER_THREATS} cluster members were provided to the analyst.")
+            return AnalystContext(subjects=subjects, missing=missing)
 
         if threat_id is not None:
             threat = self._get_threat(threat_id)

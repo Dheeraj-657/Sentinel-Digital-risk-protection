@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { isBlockedHostname, isNonPublicIp } from "./net-guard";
 import { ENTITY_TYPES, type BrandReference, type EntityType, type NormalizedEntity, type SocialPlatform } from "./types";
 
 /* ------------------------------------------------------------------ */
@@ -97,8 +98,14 @@ function parseUrlLike(raw: string): URL {
 
 function assertHost(host: string) {
   if (!host) throw new EntityValidationError("No hostname found in the input.");
-  if (host === "localhost" || host.endsWith(".local") || host.endsWith(".internal")) {
+  if (isBlockedHostname(host)) {
     throw new EntityValidationError("Local/internal hostnames can't be analysed.");
+  }
+  // IP literals are allowed only when publicly routable: loopback, RFC1918,
+  // link-local (incl. 169.254.169.254 cloud metadata), CGNAT, IPv4-mapped
+  // IPv6 forms etc. are rejected before anything is stored or fetched.
+  if (isIpAddress(host) && isNonPublicIp(host)) {
+    throw new EntityValidationError("Private, loopback and link-local addresses can't be analysed.");
   }
   if (!isIpAddress(host) && !HOSTNAME_RE.test(host)) {
     throw new EntityValidationError(`"${host}" is not a valid public hostname.`);

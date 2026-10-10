@@ -8,6 +8,7 @@ import { groundAssessment } from "../src/lib/ai/grounding";
 import { normalizeBrand, normalizeEntity, EntityValidationError } from "../src/lib/engine/entity";
 import { DEMO_BRANDS, DEMO_ENTITIES } from "../src/lib/demo/dataset";
 import type { RiskLevel } from "../src/lib/engine/types";
+import { netGuardChecks } from "./net-guard-check";
 
 const EXPECT: Record<string, RiskLevel[]> = {
   "Credential-phishing page": ["CRITICAL"],
@@ -51,7 +52,14 @@ const verbose = process.argv.includes("-v");
   }
 
   // Input validation
-  const bad: [string, string][] = [["DOMAIN", "localhost"], ["DOMAIN", "not a domain"], ["APP", "hello"], ["PROFILE", "https://example.com/x"]];
+  const bad: [string, string][] = [
+    ["DOMAIN", "localhost"], ["DOMAIN", "not a domain"], ["APP", "hello"], ["PROFILE", "https://example.com/x"],
+    // SSRF regressions: private / loopback / metadata IP literals in every spelling
+    ["WEBSITE", "http://127.0.0.1:8000/readyz"], ["DOMAIN", "169.254.169.254"], ["WEBSITE", "http://[::1]/"],
+    ["WEBSITE", "http://10.0.0.5/"], ["WEBSITE", "http://192.168.1.1/admin"], ["WEBSITE", "http://0x7f000001/"],
+    ["WEBSITE", "http://2130706433/"], ["WEBSITE", "http://[::ffff:127.0.0.1]/"], ["WEBSITE", "http://[::ffff:a9fe:a9fe]/"],
+    ["WEBSITE", "http://0.0.0.0/"], ["WEBSITE", "http://foo.localhost/"], ["DOMAIN", "metadata.google.internal"],
+  ];
   for (const [t, i] of bad) {
     try {
       normalizeEntity(t as never, i);
@@ -61,6 +69,19 @@ const verbose = process.argv.includes("-v");
       console.log(`✔ rejects ${t} "${i}" — ${(e as EntityValidationError).message}`);
     }
   }
+
+  // Accepted inputs that look similar but are public
+  for (const [t, i] of [["WEBSITE", "http://8.8.8.8/"], ["DOMAIN", "example.com"]] as [string, string][]) {
+    try {
+      normalizeEntity(t as never, i);
+      console.log(`✔ accepts public ${t} "${i}"`);
+    } catch (e) {
+      failures++;
+      console.log(`✘ rejected public ${t} "${i}" — ${(e as Error).message}`);
+    }
+  }
+
+  failures += await netGuardChecks();
 
   // Grounding guard
   const b = normalizeBrand(DEMO_BRANDS[0]);

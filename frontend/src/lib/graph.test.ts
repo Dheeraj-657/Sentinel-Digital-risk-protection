@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildGraph, layoutGraph } from "./graph";
+import { buildGraph, clusterThreatIds, layoutGraph } from "./graph";
 import type { M3EntityListItem, RelatedThreatItem, ThreatSummary } from "./types";
 
 const T = "2026-10-10T10:00:00Z";
@@ -102,6 +102,17 @@ describe("buildGraph", () => {
     });
     expect(graph.nodes.filter((n) => n.kind === "identifier")).toHaveLength(0);
     expect(graph.nodes.find((n) => n.id === "e:A")?.score).toBe(60);
+  });
+});
+
+describe("clusterThreatIds", () => {
+  it("sends each member's highest verdict, highest first", () => {
+    const graph = buildGraph({
+      ...base,
+      threats: [threat("t1", "A", "brand-1", 60), threat("t1b", "A", "brand-2", 80), threat("t2", "B", "brand-2", 30)],
+      related: new Map([["t1", [rel("t2", "B", "domain", "acme-help.example")]]]),
+    });
+    expect(clusterThreatIds(graph.clusters[0], graph.nodes)).toEqual(["t1b", "t2"]);
   });
 });
 

@@ -163,6 +163,66 @@ class TestTemplatePath:
         assert "64/100" in body["answer"] and "31/100" in body["answer"]
         assert 'domain "acme-help.example"' in body["answer"]
 
+    def test_campaign_summary_groups_only_by_exact_shared_identifiers(self, client, scenario):
+        body = ask(client, scenario["tenant"], question="Summarize a potential campaign",
+                   cluster_threat_ids=[str(scenario["threat_a"].id), str(scenario["threat_b"].id)]).json()
+        assert body["intent"] == "campaign"
+        answer = body["answer"]
+        assert "not a confirmed campaign" in answer
+        assert 'domain "acme-help.example" is shared by' in answer
+        assert "64/100" in answer and "31/100" in answer
+        cited = {str(t) for t in body["citations"]["threat_ids"]}
+        assert {str(scenario["threat_a"].id), str(scenario["threat_b"].id)} <= cited
+        assert str(scenario["ev_domain"]) in {str(e) for e in body["citations"]["evidence_ids"]}
+
+    def test_campaign_with_unlinked_members_says_so(self, client, scenario, session, tenant_id):
+        # A verdict on an entity that shares nothing with the others.
+        lone = uuid.uuid4()
+        client.app.state.entity_provider.register(
+            EntityReference(entity_id=lone, tenant_id=tenant_id, entity_type=EntityType.MOBILE_APP,
+                            display_name="Lone App (SYNTHETIC)", identifiers={"package": "com.lone.app"}))
+        t = Threat(tenant_id=tenant_id, brand_id=scenario["brand"], entity_id=lone, risk_score=12,
+                   risk_level=RiskLevel.LOW, classification=ThreatClassification.PHISHING, confidence=0.4,
+                   status=ThreatStatus.OPEN, model_version="synthetic@1", risk_engine_version="1.0.0",
+                   analysis_timestamp=NOW)
+        session.add(t)
+        session.commit()
+        body = ask(client, tenant_id, question="Is this a campaign?",
+                   cluster_threat_ids=[str(scenario["threat_a"].id), str(scenario["threat_b"].id), str(t.id)]).json()
+        assert "Not linked to any other member: Lone App (SYNTHETIC)" in body["answer"]
+
+    def test_campaign_of_unrelated_pair_reports_no_link(self, client, scenario, session, tenant_id):
+        lone = uuid.uuid4()
+        client.app.state.entity_provider.register(
+            EntityReference(entity_id=lone, tenant_id=tenant_id, entity_type=EntityType.MOBILE_APP,
+                            display_name="Lone App (SYNTHETIC)", identifiers={"package": "com.lone.app"}))
+        t = Threat(tenant_id=tenant_id, brand_id=scenario["brand"], entity_id=lone, risk_score=12,
+                   risk_level=RiskLevel.LOW, classification=ThreatClassification.PHISHING, confidence=0.4,
+                   status=ThreatStatus.OPEN, model_version="synthetic@1", risk_engine_version="1.0.0",
+                   analysis_timestamp=NOW)
+        session.add(t)
+        session.commit()
+        body = ask(client, tenant_id, question="Summarize",
+                   cluster_threat_ids=[str(scenario["threat_a"].id), str(t.id)]).json()
+        assert "share no stored identifier" in body["answer"]
+
+    def test_campaign_question_on_single_threat_explains_need_for_links(self, client, scenario):
+        body = ask(client, scenario["tenant"], question="Summarize a potential campaign",
+                   threat_id=str(scenario["threat_a"].id)).json()
+        assert body["intent"] == "campaign"
+        assert "Acme Rewards (SYNTHETIC)" in body["answer"]
+        assert "not a confirmed campaign" in body["answer"]
+
+    def test_cluster_member_from_other_tenant_is_404(self, client, scenario):
+        r = ask(client, uuid.uuid4(), question="campaign?",
+                cluster_threat_ids=[str(scenario["threat_a"].id), str(scenario["threat_b"].id)])
+        assert r.status_code == 404
+
+    def test_cluster_and_compare_are_exclusive(self, client, scenario):
+        r = ask(client, scenario["tenant"], question="x?", compare_threat_id=str(scenario["threat_b"].id),
+                cluster_threat_ids=[str(scenario["threat_a"].id)])
+        assert r.status_code == 422
+
     def test_entity_subject_resolves_its_highest_verdict(self, client, scenario):
         body = ask(client, scenario["tenant"], question="Summarize this investigation",
                    entity_id=str(scenario["entity_a"])).json()
@@ -236,6 +296,7 @@ class TestGrounding:
         ("The risk score of 90 reflects this [ev:{ev}].", "risk score"),  # 90 is a factor score, not the verdict
         ("The domain has been taken down [ev:{ev}].", "security action"),
         ("Strong impersonation signals overall.", "cited none"),
+        ("This is a confirmed phishing campaign [ev:{ev}].", "confirmed campaign"),
     ])
     def test_ungrounded_answers_fall_back(self, client, scenario, answer, reason):
         body = self._ask_with(client, scenario, {
@@ -244,6 +305,12 @@ class TestGrounding:
         assert "grounding check" in body["notes"][0]
         assert reason in body["notes"][0]
         assert "64/100" in body["answer"]  # deterministic restatement of the stored verdict
+
+    def test_negated_campaign_wording_is_allowed(self, client, scenario):
+        body = self._ask_with(client, scenario, {
+            "answer": f"Shares a domain with another entity; this is not a confirmed campaign [ev:{scenario['ev_domain']}].",
+            "limitations": []})
+        assert body["source"] == "GROQ"
 
     def test_unknown_citation_is_stripped_not_trusted(self, client, scenario):
         bogus = uuid.uuid4()

@@ -19,17 +19,48 @@ interface Message {
   response?: AnalystResponse;
   error?: string;
   /** For retry: the request this message answered or failed. */
-  request?: { question: string; compareThreatId?: string | null };
+  request?: AskOptions & { question: string };
 }
 
-function suggestions(level: RiskLevel | null, hasRelations: boolean): string[] {
-  return [
-    level ? `Why was this entity classified as ${level.toLowerCase()} risk?` : "Why might this entity be risky?",
-    "What evidence supports the assessment?",
-    hasRelations ? "Which entities are connected to this domain?" : "Is this entity connected to other threats?",
-    "Summarize the available evidence for this investigation.",
-    "What should the security analyst investigate next?",
+interface AskOptions {
+  compareThreatId?: string | null;
+  clusterThreatIds?: string[];
+}
+
+interface Suggestion {
+  question: string;
+  options?: AskOptions;
+  hint?: string;
+}
+
+function suggestions(
+  level: RiskLevel | null,
+  hasRelations: boolean,
+  campaignThreatIds: string[],
+  compareOptions: CompareOption[],
+): Suggestion[] {
+  const list: Suggestion[] = [
+    { question: level ? `Why was this entity classified as ${level.toLowerCase()} risk?` : "Why might this entity be risky?" },
+    { question: "What evidence supports the assessment?" },
+    { question: hasRelations ? "Which entities are connected to this domain?" : "Is this entity connected to other threats?" },
+    {
+      question: "Summarize a potential campaign involving this entity.",
+      options: campaignThreatIds.length > 1 ? { clusterThreatIds: campaignThreatIds } : undefined,
+      hint:
+        campaignThreatIds.length > 1
+          ? `${campaignThreatIds.length} verdicts linked by exact shared identifiers`
+          : "No linked verdicts yet; the analyst will explain what is missing",
+    },
   ];
+  if (compareOptions.length > 0) {
+    list.push({
+      question: "Compare these two reports.",
+      options: { compareThreatId: compareOptions[0].threatId },
+      hint: `With ${compareOptions[0].label}`,
+    });
+  }
+  list.push({ question: "What should the security analyst investigate next?" });
+  return list;
 }
 
 /**
@@ -45,6 +76,7 @@ export function AnalystPanel({
   riskLevel,
   hasRelations,
   compareOptions,
+  campaignThreatIds = [],
   onCiteEvidence,
 }: {
   entityId: string;
@@ -52,6 +84,8 @@ export function AnalystPanel({
   riskLevel: RiskLevel | null;
   hasRelations: boolean;
   compareOptions: CompareOption[];
+  /** Subject verdict + verdicts the risk engine links to it by exact shared identifiers. */
+  campaignThreatIds?: string[];
   onCiteEvidence: (evidenceId: string) => void;
 }) {
   const { tenant } = useTenant();
@@ -80,7 +114,8 @@ export function AnalystPanel({
     if (log && (messages.length > 0 || pending)) log.scrollTop = log.scrollHeight;
   }, [messages, pending]);
 
-  const ask = async (question: string, compareThreatId?: string | null) => {
+  const ask = async (question: string, options: AskOptions = {}) => {
+    const { compareThreatId, clusterThreatIds } = options;
     const trimmed = question.trim();
     if (trimmed.length < 2 || pending) return; // no duplicate concurrent requests
     const history: AnalystTurn[] = messages
@@ -101,7 +136,8 @@ export function AnalystPanel({
           question: trimmed,
           entity_id: entityId,
           threat_id: threatId,
-          compare_threat_id: compareThreatId || null,
+          compare_threat_id: clusterThreatIds?.length ? null : compareThreatId || null,
+          ...(clusterThreatIds?.length ? { cluster_threat_ids: clusterThreatIds } : {}),
           history,
         },
         tenant,
@@ -110,13 +146,13 @@ export function AnalystPanel({
       if (controller.signal.aborted) return;
       setMessages((current) => [
         ...current,
-        { id: nextId.current++, role: "assistant", text: response.answer, response, request: { question: trimmed, compareThreatId } },
+        { id: nextId.current++, role: "assistant", text: response.answer, response, request: { question: trimmed, ...options } },
       ]);
     } catch (err) {
       if (controller.signal.aborted) return;
       setMessages((current) => [
         ...current,
-        { id: nextId.current++, role: "assistant", text: "", error: errorMessage(err), request: { question: trimmed, compareThreatId } },
+        { id: nextId.current++, role: "assistant", text: "", error: errorMessage(err), request: { question: trimmed, ...options } },
       ]);
     } finally {
       if (!controller.signal.aborted) setPending(false);
@@ -130,7 +166,8 @@ export function AnalystPanel({
       const index = current.findIndex((m) => m.id === message.id);
       return current.filter((_, k) => k !== index && !(k === index - 1 && current[k].role === "user"));
     });
-    void ask(message.request.question, message.request.compareThreatId);
+    const { question, ...options } = message.request;
+    void ask(question, options);
   };
 
   const llm = status.data;
@@ -164,15 +201,19 @@ export function AnalystPanel({
           <li className="list-none">
             <p className="mb-2 text-xs text-faint">Suggested questions</p>
             <div className="flex flex-col gap-1.5">
-              {suggestions(riskLevel, hasRelations).map((q) => (
+              {suggestions(riskLevel, hasRelations, campaignThreatIds, compareOptions).map((s) => (
                 <button
-                  key={q}
+                  key={s.question}
                   type="button"
-                  onClick={() => ask(q)}
+                  onClick={() => {
+                    if (s.options?.compareThreatId) setCompareWith(s.options.compareThreatId);
+                    void ask(s.question, s.options);
+                  }}
                   disabled={pending}
                   className="rounded-md border border-line-soft bg-white/[0.02] px-3 py-2 text-left text-[13px] text-fg transition hover:border-ai/50 disabled:opacity-50"
                 >
-                  {q}
+                  {s.question}
+                  {s.hint ? <span className="mt-0.5 block text-[11px] text-faint">{s.hint}</span> : null}
                 </button>
               ))}
             </div>
@@ -210,7 +251,7 @@ export function AnalystPanel({
         className="border-t border-line-soft px-4 py-3"
         onSubmit={(event) => {
           event.preventDefault();
-          void ask(draft, compareWith || null);
+          void ask(draft, { compareThreatId: compareWith || null });
         }}
       >
         {compareOptions.length > 0 ? (
@@ -246,7 +287,7 @@ export function AnalystPanel({
             onKeyDown={(event) => {
               if (event.key === "Enter" && !event.shiftKey) {
                 event.preventDefault();
-                void ask(draft, compareWith || null);
+                void ask(draft, { compareThreatId: compareWith || null });
               }
             }}
             placeholder={compareWith ? "Ask how the two verdicts compare…" : "Ask about this entity's risk, evidence or connections…"}

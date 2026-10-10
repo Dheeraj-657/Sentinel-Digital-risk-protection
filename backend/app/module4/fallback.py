@@ -11,7 +11,7 @@ from typing import Any
 
 from app.module4.context import AnalystContext, Subject
 
-INTENTS = ("compare", "relations", "evidence", "next_steps", "why", "summary")
+INTENTS = ("campaign", "compare", "relations", "evidence", "next_steps", "why", "summary")
 
 _INTENT_PATTERNS: list[tuple[str, re.Pattern]] = [
     ("compare", re.compile(r"\b(compare|comparison|versus|vs\.?|difference|differ)\b", re.I)),
@@ -23,9 +23,16 @@ _INTENT_PATTERNS: list[tuple[str, re.Pattern]] = [
 ]
 
 
-def detect_intent(question: str, has_compare: bool) -> str:
+_CAMPAIGN_RE = re.compile(r"\b(campaigns?|clusters?|coordinated|operation)\b", re.I)
+
+
+def detect_intent(question: str, has_compare: bool, has_cluster: bool = False) -> str:
+    if has_cluster:
+        return "campaign"
     if has_compare:
         return "compare"
+    if _CAMPAIGN_RE.search(question):
+        return "campaign"
     for intent, pattern in _INTENT_PATTERNS:
         if intent == "compare":
             continue
@@ -258,6 +265,76 @@ def _compare(ctx: AnalystContext) -> list[str]:
     return lines
 
 
+def _campaign(ctx: AnalystContext) -> list[str]:
+    """Potential-campaign summary over several verdicts.
+
+    Members are linked ONLY where a member's stored /related result names another
+    member (exact stored-attribute match). Nothing is grouped by similarity,
+    brand or timing, and the result is never called a confirmed campaign.
+    """
+    members = [s for s in ctx.subjects if s.threat]
+    if len(members) < 2:
+        lines = _relations(ctx)
+        return [
+            "A campaign summary needs at least two verdicts linked by shared identifiers. "
+            "Here is what the risk engine links to this one:",
+            "",
+        ] + lines
+
+    by_entity = {m.threat["entity_id"]: m for m in members}
+    links: dict[tuple[str, str], dict[str, Any]] = {}
+    for m in members:
+        for r in m.related:
+            if r["same_entity"] or r["entity_id"] not in by_entity:
+                continue
+            key = (r["shared_attribute"]["key"], r["shared_attribute"]["value"])
+            link = links.setdefault(key, {"entities": set(), "evidence": []})
+            link["entities"].update({m.threat["entity_id"], r["entity_id"]})
+            link["evidence"] += r["target_evidence_ids"] + r["evidence_ids"]
+
+    linked = set().union(*(l["entities"] for l in links.values())) if links else set()
+    top = max(members, key=lambda m: m.threat["risk_score"])
+    brands = sorted({m.brand["name"] for m in members if m.brand})
+    classes = sorted({_human(m.threat["classification"]) for m in members})
+
+    lines = [
+        f"Potential campaign: {len(members)} verdicts reviewed. "
+        "This is a candidate grouping for review, not a confirmed campaign; campaign "
+        "detection is not implemented in the risk engine.",
+        "",
+        "Members:",
+    ]
+    for m in members:
+        lines.append(f"- {_verdict_line(m)}")
+    lines += ["", "Why they are grouped (exact shared identifiers recorded by the risk engine):"]
+    if links:
+        for (key, value), link in links.items():
+            names = ", ".join(
+                f"{_name(by_entity[e])} [entity:{e}]" for e in sorted(link["entities"]) if e in by_entity
+            )
+            lines.append(f"- {key} \"{value}\" is shared by {names}. {_cite_all(link['evidence'])}".rstrip())
+    else:
+        lines.append("- None. These verdicts share no stored identifier, so the risk engine does not link them.")
+    unlinked = [m for m in members if m.threat["entity_id"] not in linked]
+    if links and unlinked:
+        lines.append(
+            "- Not linked to any other member: "
+            + ", ".join(f"{_name(m)} [threat:{m.threat['threat_id']}]" for m in unlinked)
+            + "."
+        )
+    lines += [
+        "",
+        f"Highest risk in the group: {_name(top)} [threat:{top.threat['threat_id']}], "
+        f"{top.threat['risk_level']} ({top.threat['risk_score']}/100).",
+        f"Classifications present: {', '.join(classes)}.",
+        f"Protected brands targeted: {', '.join(brands) if brands else 'brand references unavailable'}.",
+        "",
+        "To confirm or rule out a campaign, verify the shared identifiers independently "
+        "(registration, hosting and account ownership) and review each member's evidence.",
+    ]
+    return lines
+
+
 def _summary(ctx: AnalystContext) -> list[str]:
     s = ctx.subjects[0]
     lines: list[str] = []
@@ -286,6 +363,7 @@ def _summary(ctx: AnalystContext) -> list[str]:
 
 
 _BUILDERS = {
+    "campaign": _campaign,
     "why": _why,
     "evidence": _evidence,
     "relations": _relations,

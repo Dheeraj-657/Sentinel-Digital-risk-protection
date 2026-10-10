@@ -1,12 +1,14 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
-import { m1, m2, m3 } from "../lib/api";
-import { useApi } from "../lib/hooks";
+import { m1, m2, m3, m4 } from "../lib/api";
+import { parseAnswerLine } from "../lib/analyst";
+import { errorMessage, useApi } from "../lib/hooks";
 import { useTenant } from "../lib/tenant";
 import { findBrandForUuid } from "../lib/brand-bridge";
 import {
   boundsOf,
   buildGraph,
+  clusterThreatIds,
   computeClusters,
   layoutGraph,
   type EdgeKind,
@@ -23,7 +25,7 @@ import {
   shortId,
 } from "../lib/format";
 import { Badge, Card, CardHeader, EmptyState, ErrorState, PageHeader, Skeleton } from "../components/ui";
-import type { RelatedThreatItem, RiskLevel } from "../lib/types";
+import type { AnalystResponse, RelatedThreatItem, RiskLevel } from "../lib/types";
 
 const MAX_THREATS = 100;
 const CONCURRENCY = 4;
@@ -223,7 +225,7 @@ export function ThreatGraph() {
           </div>
           <div className="space-y-4">
             <DetailPanel graph={graph} selection={selection} onSelect={setSelection} />
-            <ClustersPanel clusters={graph.clusters} nodes={graph.nodes} onSelect={setSelection} />
+            <ClustersPanel clusters={graph.clusters} nodes={graph.nodes} onSelect={setSelection} tenant={tenant} />
             {relations.warnings.length ? (
               <p className="text-xs text-risk-medium">Engine warnings: {relations.warnings.slice(0, 3).join(" ")}</p>
             ) : null}
@@ -727,14 +729,88 @@ function NodeLink({ node, onSelect }: { node: GraphNode | undefined; onSelect: (
   );
 }
 
+function ClusterSummary({ threatIds, tenant }: { threatIds: string[]; tenant: string }) {
+  const [state, setState] = useState<{ loading: boolean; answer?: AnalystResponse; error?: string }>({ loading: false });
+  const abort = useRef<AbortController | null>(null);
+  useEffect(() => () => abort.current?.abort(), []);
+  const run = async () => {
+    abort.current?.abort();
+    const controller = new AbortController();
+    abort.current = controller;
+    setState({ loading: true });
+    try {
+      const answer = await m4.askAnalyst(
+        { question: "Summarize this potential campaign.", cluster_threat_ids: threatIds },
+        tenant,
+        controller.signal,
+      );
+      if (!controller.signal.aborted) setState({ loading: false, answer });
+    } catch (err) {
+      if (!controller.signal.aborted) setState({ loading: false, error: errorMessage(err) });
+    }
+  };
+  return (
+    <div className="pt-1">
+      <button
+        type="button"
+        onClick={run}
+        disabled={state.loading || threatIds.length < 2}
+        className="rounded-md border border-ai/40 px-2 py-1 text-[11px] font-medium text-ai transition hover:border-ai disabled:opacity-50"
+      >
+        {state.loading ? "Summarizing…" : state.answer ? "Re-run analyst summary" : "Summarize potential campaign"}
+      </button>
+      {state.error ? (
+        <p role="alert" className="mt-1.5 text-[11px] text-risk-critical">
+          The analyst could not answer: {state.error}
+        </p>
+      ) : null}
+      {state.answer ? (
+        <div className="mt-2 space-y-1 rounded-md border border-ai/25 bg-ai/[0.05] px-2.5 py-2 text-[12px] leading-relaxed text-fg">
+          <p className="text-[10px] text-faint">
+            {state.answer.source === "GROQ" ? `AI assessment · ${state.answer.model ?? ""}` : "Evidence summary (template)"}
+          </p>
+          {state.answer.answer.split("\n").map((line, i) =>
+            line.trim() === "" ? (
+              <div key={i} className="h-1" aria-hidden />
+            ) : (
+              <p key={i} className={line.startsWith("- ") ? "pl-3 -indent-3" : undefined}>
+                {parseAnswerLine(line).map((part, j) =>
+                  part.kind === "text" ? (
+                    <span key={j}>{part.text}</span>
+                  ) : part.kind === "evidence" ? (
+                    <span key={j} title={`Evidence ${part.id}`} className="mx-0.5 rounded border border-evidence/40 px-1 font-mono text-[10px] text-evidence">
+                      ev {shortId(part.id)}
+                    </span>
+                  ) : (
+                    <Link
+                      key={j}
+                      to={part.kind === "threat" ? `/threats/${part.id}` : `/investigate/${part.id}`}
+                      className="mx-0.5 rounded border border-line px-1 font-mono text-[10px] text-muted hover:border-action/60 hover:text-fg"
+                    >
+                      {part.kind} {shortId(part.id)}
+                    </Link>
+                  ),
+                )}
+              </p>
+            ),
+          )}
+          {state.answer.notes.length ? <p className="text-[10px] text-faint">{state.answer.notes.join(" ")}</p> : null}
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
 function ClustersPanel({
   clusters,
   nodes,
   onSelect,
+  tenant,
 }: {
   clusters: ReturnType<typeof computeClusters>;
   nodes: GraphNode[];
   onSelect: (s: Selection) => void;
+  tenant: string;
 }) {
   const name = new Map(nodes.map((n) => [n.id, n.label]));
   return (
@@ -763,6 +839,7 @@ function ClustersPanel({
                   </li>
                 ))}
               </ul>
+              <ClusterSummary threatIds={clusterThreatIds(c, nodes)} tenant={tenant} />
             </li>
           ))}
         </ul>

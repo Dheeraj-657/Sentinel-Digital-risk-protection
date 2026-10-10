@@ -82,11 +82,32 @@ def _strip_for_number_check(text: str) -> str:
     return LIST_NUMBERING_RE.sub(" ", text)
 
 
+# Campaign detection is not implemented, so an answer may never assert one.
+CAMPAIGN_CLAIM_RE = re.compile(
+    r"\bconfirmed\s+(?:\w+\s+){0,2}campaign\b"
+    r"|\bcampaign\s+(?:is|was|has been|have been)\s+(?:confirmed|verified|proven|established)\b"
+    r"|\b(?:is|are)\s+(?:definitely|clearly|certainly)\s+(?:part of\s+)?(?:a|the|one)\s+(?:\w+\s+)?campaign\b",
+    re.I,
+)
+_NEGATION_RE = re.compile(r"\b(?:not|no|never|cannot|can't|isn't|aren't|unconfirmed|without)\b[^.]{0,24}$", re.I)
+
+
+def _asserts_campaign(text: str) -> bool:
+    for match in CAMPAIGN_CLAIM_RE.finditer(text):
+        if not _NEGATION_RE.search(text[: match.start()]):
+            return True
+    return False
+
+
 def check_text(text: str, ctx: AnalystContext, allowed: set[str]) -> None:
     """Raise GroundingRejected if a text fragment breaks a hard rule."""
     if ACTION_CLAIM_RE.search(text):
         raise GroundingRejected(
             "the answer claimed a security action was performed; the analyst cannot perform actions"
+        )
+    if _asserts_campaign(text):
+        raise GroundingRejected(
+            "the answer asserted a confirmed campaign; campaign detection is not implemented"
         )
     levels = {m.upper() for m in LEVEL_RE.findall(text)}
     unknown_levels = levels - ctx.risk_levels

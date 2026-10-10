@@ -305,3 +305,17 @@ export function boundsOf(points: Iterable<Point>, pad = 60): { minX: number; min
   if (!Number.isFinite(minX)) return { minX: -100, minY: -100, width: 200, height: 200 };
   return { minX: minX - pad, minY: minY - pad, width: maxX - minX + pad * 2, height: maxY - minY + pad * 2 };
 }
+
+/**
+ * Threat ids to send to the analyst for a cluster summary: each member entity's
+ * highest-scoring verdict, highest first (max 12, the backend limit).
+ */
+export function clusterThreatIds(cluster: Cluster, nodes: GraphNode[]): string[] {
+  const byId = new Map(nodes.map((n) => [n.id, n]));
+  return cluster.entityIds
+    .map((id) => [...(byId.get(`e:${id}`)?.verdicts ?? [])].sort((a, b) => b.risk_score - a.risk_score)[0])
+    .filter((t): t is ThreatSummary => Boolean(t))
+    .sort((a, b) => b.risk_score - a.risk_score)
+    .map((t) => t.threat_id)
+    .slice(0, 12);
+}

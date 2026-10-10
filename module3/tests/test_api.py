@@ -275,6 +275,27 @@ class TestEvidenceIngestion:
         assert response.status_code == 404
         assert response.json()["error_code"] == "SOURCE_NOT_FOUND"
 
+    def test_non_http_url_rejected(
+        self, client, tenant_headers, tenant_a, make_source, make_entity
+    ):
+        """Regression: javascript:/data:/file: URLs must never be stored."""
+        source = make_source(tenant_a)
+        entity = make_entity(tenant_a)
+        for bad in ("javascript:alert(1)", "data:text/html,x", "file:///etc/passwd", "//evil.example", "http:///x"):
+            response = client.post(
+                f"/api/v1/entities/{entity['entity_id']}/evidence",
+                json={"source_id": source["source_id"], "evidence_type": "TEXT_CONTENT", "url": bad},
+                headers=tenant_headers(tenant_a),
+            )
+            assert response.status_code == 422, bad
+        ok = client.post(
+            f"/api/v1/entities/{entity['entity_id']}/evidence",
+            json={"source_id": source["source_id"], "evidence_type": "TEXT_CONTENT", "url": " https://ok.example/p "},
+            headers=tenant_headers(tenant_a),
+        )
+        assert ok.status_code == 201
+        assert ok.json()["url"] == "https://ok.example/p"
+
     def test_cross_tenant_source_404(
         self, client, tenant_headers, tenant_a, tenant_b, make_source, make_entity
     ):

@@ -181,6 +181,12 @@ export function Investigation() {
     ).map((r) => ({ threatId: r.threat_id, label: `${r.entity_display_name ?? shortId(r.entity_id)} (shares ${r.shared_attribute.key})` })),
   ];
 
+  // Potential-campaign members: this verdict plus verdicts on OTHER entities the
+  // risk engine linked by an exact shared identifier. Nothing else is grouped.
+  const campaignThreatIds = selectedId
+    ? [selectedId, ...uniqueBy(relatedItems.filter((r) => r.entity_id !== entityId), (r) => r.threat_id).map((r) => r.threat_id)].slice(0, 12)
+    : [];
+
   return (
     <div>
       <EntityHeader
@@ -269,6 +275,7 @@ export function Investigation() {
             riskLevel={t?.risk_level ?? null}
             hasRelations={relatedItems.some((r) => r.entity_id !== entityId)}
             compareOptions={compareOptions}
+            campaignThreatIds={campaignThreatIds}
             onCiteEvidence={citeEvidence}
           />
         </div>

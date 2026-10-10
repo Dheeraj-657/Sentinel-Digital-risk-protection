@@ -6,6 +6,7 @@ never a runtime dependency).
 """
 from __future__ import annotations
 
+import re
 import uuid
 from datetime import datetime
 from enum import Enum
@@ -143,5 +144,22 @@ class EvidenceCreate(BaseModel):
     collected_at: datetime | None = None
     text: str | None = None
     image_hash: str | None = None
-    url: str | None = None
+    url: str | None = Field(default=None, max_length=2048)
     metadata: dict[str, Any] = Field(default_factory=dict)
+
+    @field_validator("url")
+    @classmethod
+    def _http_url_only(cls, value: str | None) -> str | None:
+        """Evidence URLs are shown to analysts; only http(s) is meaningful.
+
+        Rejects javascript:, data:, file: and similar schemes so a stored
+        value can never become an executable or local-file link downstream.
+        """
+        if value is None:
+            return None
+        stripped = value.strip()
+        if not stripped:
+            return None
+        if not re.match(r"^https?://[^\s/]", stripped, flags=re.IGNORECASE):
+            raise ValueError("url must be an absolute http(s) URL")
+        return stripped

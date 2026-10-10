@@ -17,7 +17,8 @@ import {
   shortId,
 } from "../lib/format";
 import { Badge, Card, CardHeader, EmptyState, ErrorState, PageHeader, TableSkeleton } from "../components/ui";
-import type { DiscoveryJobStatus, M3EntityType, ThreatSummary } from "../lib/types";
+import type { DiscoveryJobStatus, M1Brand, M1EntityType, M3EntityType, ThreatSummary } from "../lib/types";
+import { guessScanType } from "../lib/scan-input";
 
 const TYPES: M3EntityType[] = ["WEBSITE", "DOMAIN", "SOCIAL_PROFILE", "MOBILE_APP", "MESSAGING_ACCOUNT", "OTHER"];
 const STATUSES: DiscoveryJobStatus[] = ["QUEUED", "RUNNING", "COMPLETED", "PARTIAL", "FAILED"];
@@ -27,6 +28,102 @@ const STATUSES: DiscoveryJobStatus[] = ["QUEUED", "RUNNING", "COMPLETED", "PARTI
  * and the entities it and analysts registered (Module 3). The console starts
  * discovery through the existing API; it never scrapes or collects itself.
  */
+const SCAN_TYPE_LABEL: Record<M1EntityType, string> = {
+  WEBSITE: "Website",
+  DOMAIN: "Domain",
+  PROFILE: "Social profile",
+  APP: "Mobile app",
+};
+
+/** One box for a URL, profile, app or domain → Module 1 Sentinel engine scan. */
+function QuickAnalyze({ brands }: { brands: M1Brand[] | undefined }) {
+  const navigate = useNavigate();
+  const [input, setInput] = useState("");
+  const [override, setOverride] = useState<M1EntityType | "">("");
+  const [brandId, setBrandId] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const guessed = guessScanType(input);
+  const entityType = override || guessed;
+
+  const submit = async (event: React.FormEvent) => {
+    event.preventDefault();
+    const trimmed = input.trim();
+    if (trimmed.length < 3) {
+      setError("Paste a URL, profile, app package or domain (at least 3 characters).");
+      return;
+    }
+    setBusy(true);
+    setError(null);
+    try {
+      const report = await m1.createScan({ entityType, input: trimmed, ...(brandId ? { brandId } : {}) });
+      navigate(`/scans/${report.id}`);
+    } catch (err) {
+      setError(errorMessage(err));
+      setBusy(false);
+    }
+  };
+
+  return (
+    <Card className="mb-4">
+      <CardHeader
+        title="Analyze a URL, profile or app"
+        description="Runs the Sentinel risk engine (Module 1) on one suspicious item and opens its report. Private, loopback and internal addresses are refused. For evidence-based scoring of a registered entity, use New threat analysis."
+      />
+      <form onSubmit={submit} className="grid grid-cols-1 gap-2 px-4 py-4 sm:px-5 md:grid-cols-[minmax(0,2fr)_minmax(0,1fr)_minmax(0,1fr)_auto] md:items-end">
+        <div className="min-w-0">
+          <label htmlFor="qa-input" className="mb-1 block text-xs text-muted">Suspicious item</label>
+          <input
+            id="qa-input"
+            value={input}
+            onChange={(e) => setInput(e.target.value)}
+            placeholder="https://acme-help.example/login, @acme_support, com.acme.wallet"
+            spellCheck={false}
+            maxLength={2048}
+            className="w-full rounded-md border border-line bg-ink/50 px-2.5 py-1.5 text-[13px] text-fg placeholder:text-faint focus:border-action/60 focus:outline-none"
+          />
+        </div>
+        <div className="min-w-0">
+          <label htmlFor="qa-type" className="mb-1 block text-xs text-muted">Type</label>
+          <select
+            id="qa-type"
+            value={override}
+            onChange={(e) => setOverride(e.target.value as M1EntityType | "")}
+            className="w-full rounded-md border border-line bg-ink/50 px-2 py-1.5 text-[13px]"
+          >
+            <option value="">Auto: {SCAN_TYPE_LABEL[guessed]}</option>
+            {(Object.keys(SCAN_TYPE_LABEL) as M1EntityType[]).map((t) => (
+              <option key={t} value={t}>{SCAN_TYPE_LABEL[t]}</option>
+            ))}
+          </select>
+        </div>
+        <div className="min-w-0">
+          <label htmlFor="qa-brand" className="mb-1 block text-xs text-muted">Compare against</label>
+          <select
+            id="qa-brand"
+            value={brandId}
+            onChange={(e) => setBrandId(e.target.value)}
+            className="w-full rounded-md border border-line bg-ink/50 px-2 py-1.5 text-[13px]"
+          >
+            <option value="">Auto-detect brand</option>
+            {(brands ?? []).map((b) => (
+              <option key={b.id} value={b.id}>{b.name}</option>
+            ))}
+          </select>
+        </div>
+        <button
+          type="submit"
+          disabled={busy || input.trim().length < 3}
+          className="rounded-md bg-action px-3 py-1.5 text-[13px] font-semibold text-on-action transition hover:bg-action-strong disabled:cursor-not-allowed disabled:opacity-40"
+        >
+          {busy ? "Analyzing…" : "Analyze"}
+        </button>
+        {error ? <p role="alert" className="text-xs text-risk-critical md:col-span-4">{error}</p> : null}
+      </form>
+    </Card>
+  );
+}
+
 export function DiscoveryCenter() {
   const { tenant } = useTenant();
   const navigate = useNavigate();
@@ -98,6 +195,8 @@ export function DiscoveryCenter() {
         title="Discovery"
         description="Find candidate impersonations from a protected brand's DNA, then inspect what was found. Discovery queries public Certificate Transparency logs and, when configured, web search. Provider outages are reported, never masked."
       />
+
+      <QuickAnalyze brands={brands.data?.items} />
 
       <div className="grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
         <Card>

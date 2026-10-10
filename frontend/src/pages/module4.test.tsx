@@ -231,11 +231,34 @@ describe("Investigation workspace", () => {
   it("shows analyst failures with a working retry", async () => {
     vi.mocked(m4.askAnalyst).mockRejectedValueOnce(new Error("Risk engine unreachable")).mockResolvedValueOnce(analystAnswer());
     renderAt(`/investigate/${ENTITY_A}`, workspaceRoutes);
-    fireEvent.click(await screen.findByRole("button", { name: "Summarize the available evidence for this investigation." }));
+    fireEvent.click(await screen.findByRole("button", { name: "What should the security analyst investigate next?" }));
     expect(await screen.findByText("Risk engine unreachable")).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: "Retry" }));
     expect(await screen.findByText("Evidence summary (template)")).toBeTruthy();
     expect(m4.askAnalyst).toHaveBeenCalledTimes(2);
+  });
+
+  it("summarizes a potential campaign from exact-match linked verdicts only", async () => {
+    vi.mocked(m4.askAnalyst).mockResolvedValue(analystAnswer({ intent: "campaign" }));
+    renderAt(`/investigate/${ENTITY_A}`, workspaceRoutes);
+    const button = await screen.findByRole("button", { name: /Summarize a potential campaign involving this entity/ });
+    await waitFor(() => expect(button.textContent).toContain("2 verdicts linked by exact shared identifiers"));
+    fireEvent.click(button);
+    await screen.findByText("Evidence summary (template)");
+    const payload = vi.mocked(m4.askAnalyst).mock.calls[0][0];
+    expect(payload.cluster_threat_ids).toEqual([THREAT_A, THREAT_B]);
+    expect(payload.compare_threat_id).toBeNull();
+  });
+
+  it("compares two reports with one click", async () => {
+    vi.mocked(m4.askAnalyst).mockResolvedValue(analystAnswer({ intent: "compare" }));
+    renderAt(`/investigate/${ENTITY_A}`, workspaceRoutes);
+    fireEvent.click(await screen.findByRole("button", { name: /Compare these two reports/ }));
+    await screen.findByText("Evidence summary (template)");
+    expect(vi.mocked(m4.askAnalyst).mock.calls[0][0]).toEqual(
+      expect.objectContaining({ threat_id: THREAT_A, compare_threat_id: THREAT_B }),
+    );
+    expect((screen.getByLabelText("Compare with") as HTMLSelectElement).value).toBe(THREAT_B);
   });
 
   it("says plainly when an entity has no verdict", async () => {
@@ -270,6 +293,14 @@ describe("Threat graph", () => {
     fireEvent.click(screen.getByRole("radio", { name: "Table" }));
     expect(await screen.findByRole("table")).toBeTruthy();
     expect(screen.getAllByText("EXACT_ATTRIBUTE_MATCH").length).toBe(2);
+
+    vi.mocked(m4.askAnalyst).mockResolvedValue(analystAnswer({ intent: "campaign" }));
+    fireEvent.click(screen.getByRole("button", { name: "Summarize potential campaign" }));
+    expect(await screen.findByText("Evidence summary (template)")).toBeTruthy();
+    expect(vi.mocked(m4.askAnalyst).mock.calls[0][0]).toEqual({
+      question: "Summarize this potential campaign.",
+      cluster_threat_ids: [THREAT_A, THREAT_B],
+    });
   });
 
   it("never invents links when the backend reports none", async () => {
@@ -286,6 +317,26 @@ describe("Threat graph", () => {
 });
 
 describe("Discovery center", () => {
+  it("analyzes a pasted profile through the Module 1 engine and opens the report", async () => {
+    vi.mocked(m1.createScan).mockResolvedValue({ id: "scan-123" } as never);
+    renderAt("/discovery", <Route path="*" element={<DiscoveryCenter />} />);
+    const box = await screen.findByLabelText("Suspicious item");
+    fireEvent.change(box, { target: { value: "@acme_support" } });
+    expect((screen.getByLabelText("Type") as HTMLSelectElement).selectedOptions[0].textContent).toBe("Auto: Social profile");
+    fireEvent.click(screen.getByRole("button", { name: "Analyze" }));
+    await waitFor(() => expect(screen.getByTestId("where").textContent).toBe("/scans/scan-123"));
+    expect(m1.createScan).toHaveBeenCalledWith({ entityType: "PROFILE", input: "@acme_support" });
+  });
+
+  it("shows the engine's refusal for internal addresses without navigating", async () => {
+    vi.mocked(m1.createScan).mockRejectedValue(new Error("Private, loopback and link-local addresses can't be analysed."));
+    renderAt("/discovery", <Route path="*" element={<DiscoveryCenter />} />);
+    fireEvent.change(await screen.findByLabelText("Suspicious item"), { target: { value: "http://169.254.169.254/" } });
+    fireEvent.click(screen.getByRole("button", { name: "Analyze" }));
+    expect(await screen.findByText(/link-local addresses can't be analysed/)).toBeTruthy();
+    expect(screen.getByTestId("where").textContent).toBe("/discovery");
+  });
+
   it("starts discovery through the existing API with the bridged brand id", async () => {
     vi.mocked(m2.listDiscovery).mockResolvedValue({ items: [], total: 0, limit: 50, offset: 0 });
     vi.mocked(m2.createDiscovery).mockResolvedValue({ job_id: "job-9" } as never);
