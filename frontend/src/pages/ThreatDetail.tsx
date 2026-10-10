@@ -17,6 +17,7 @@ import {
   RiskLevelBadge,
   RiskScore,
   ScoreBar,
+  TableSkeleton,
 } from "../components/ui";
 import {
   CLASSIFICATION_LABEL,
@@ -27,7 +28,12 @@ import {
   formatDateTime,
   pct,
 } from "../lib/format";
-import type { EvidenceReference, RiskFactor, ThreatDetail as ThreatDetailType } from "../lib/types";
+import type {
+  EvidenceReference,
+  RelatedThreatItem,
+  RiskFactor,
+  ThreatDetail as ThreatDetailType,
+} from "../lib/types";
 
 const STATUS_ACTION_TONE: Record<string, "low" | "medium" | "neutral"> = {
   CONFIRMED: "low",
@@ -198,6 +204,7 @@ export function ThreatDetail() {
       <ScoreExplanation threat={data} />
       <FactorBreakdown factors={data.risk_factors} />
       <EvidencePanel threat={data} />
+      <RelatedThreats threatId={threatId} />
       <NextSteps threat={data} />
     </>
   );
@@ -433,6 +440,103 @@ function EvidenceRow({
         </p>
       )}
     </div>
+  );
+}
+
+/** Evidence-backed related threats: only exact matches on stored identifiers
+ * create a relation — never name similarity. Unsupported relations are simply
+ * absent rather than guessed. */
+function RelatedThreats({ threatId }: { threatId: string }) {
+  const { tenant } = useTenant();
+  const { entityName } = useEnrichment();
+  const related = useApi(() => m2.getRelated(threatId, tenant), [tenant, threatId]);
+
+  return (
+    <Card className="mt-4">
+      <CardHeader
+        title="Related threats"
+        description="Only exact matches on stored identifiers (domain, handle) link threats — every relation cites the evidence on both sides. Look-alike names are deliberately not treated as relations."
+      />
+      {related.loading ? (
+        <TableSkeleton rows={2} />
+      ) : related.error ? (
+        <p role="alert" className="px-4 py-3.5 text-xs text-risk-medium sm:px-5">
+          Related-threat lookup failed ({errorMessage(related.error)}) — relations stay hidden
+          rather than guessed.
+        </p>
+      ) : related.data && related.data.items.length > 0 ? (
+        <ul className="divide-y divide-line-soft">
+          {related.data.items.map((item) => (
+            <RelatedThreatRow key={item.threat_id} item={item} entityName={entityName} />
+          ))}
+        </ul>
+      ) : (
+        <EmptyState
+          title="No evidence-backed relations"
+          description="No other threat shares an exact stored identifier with this one. Similar-looking names are not counted as relations."
+        />
+      )}
+      {related.data && related.data.warnings.length > 0 ? (
+        <div role="status" className="border-t border-line-soft px-4 py-3 sm:px-5">
+          {related.data.warnings.map((warning) => (
+            <p key={warning} className="text-[11px] leading-relaxed text-muted">
+              {warning}
+            </p>
+          ))}
+        </div>
+      ) : null}
+    </Card>
+  );
+}
+
+function RelatedThreatRow({
+  item,
+  entityName,
+}: {
+  item: RelatedThreatItem;
+  entityName: (entityId: string) => string;
+}) {
+  return (
+    <li className="space-y-2 px-4 py-3.5 sm:px-5">
+      <div className="flex flex-wrap items-center gap-2">
+        <Link
+          to={`/threats/${item.threat_id}`}
+          className="text-sm font-medium text-fg hover:text-action"
+        >
+          {item.entity_display_name ?? entityName(item.entity_id)}
+        </Link>
+        <Badge tone="evidence">{item.relation_type}</Badge>
+        <span className="text-[11px] text-faint">basis: {item.basis}</span>
+      </div>
+      <p className="text-xs text-muted">
+        Shares <span className="font-mono text-fg">{item.shared_attribute.key}</span> ={" "}
+        <span className="font-mono text-fg">{item.shared_attribute.value}</span> (exact value on
+        both entities)
+      </p>
+      <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-[11px] text-muted">
+        <span>
+          Evidence here:{" "}
+          <span className="font-mono text-fg">{item.evidence_ids.length}</span>
+        </span>
+        <span>
+          On related threat:{" "}
+          <span className="font-mono text-fg">{item.target_evidence_ids.length}</span>
+        </span>
+        <Link
+          to={`/entities/${item.entity_id}`}
+          className="text-action hover:underline"
+        >
+          View shared entity &amp; evidence →
+        </Link>
+      </div>
+      {item.evidence_ids.length > 0 ? (
+        <p className="flex flex-wrap gap-1">
+          {item.evidence_ids.map((id) => (
+            <Chip key={id}>{id}</Chip>
+          ))}
+        </p>
+      ) : null}
+    </li>
   );
 }
 

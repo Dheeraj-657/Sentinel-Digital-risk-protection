@@ -1,4 +1,6 @@
 import type {
+  DiscoveryJobStatus,
+  DiscoveryProviderStatus,
   FactorType,
   JobStatus,
   M1ActionPriority,
@@ -175,4 +177,44 @@ export const JOB_STATUS_LABEL: Record<JobStatus, string> = {
   COMPLETED: "Completed",
   FAILED: "Failed",
   CANCELLED: "Cancelled",
+};
+
+/* ---------- Discovery jobs (Module 2) ---------- */
+
+export const DISCOVERY_JOB_STATUS_LABEL: Record<DiscoveryJobStatus, string> = {
+  QUEUED: "Queued",
+  RUNNING: "Running",
+  COMPLETED: "Completed",
+  PARTIAL: "Partial",
+  FAILED: "Failed",
+};
+
+export const DISCOVERY_JOB_STATUS_TONE: Record<DiscoveryJobStatus, BadgeTone> = {
+  QUEUED: "neutral",
+  RUNNING: "ai",
+  COMPLETED: "low",
+  PARTIAL: "medium",
+  FAILED: "critical",
+};
+
+export const DISCOVERY_PROVIDER_STATUS_LABEL: Record<DiscoveryProviderStatus, string> = {
+  COMPLETED: "Completed",
+  EMPTY: "No results",
+  UNCONFIGURED: "Not configured",
+  TIMEOUT: "Timed out",
+  RATE_LIMITED: "Rate limited",
+  FAILED: "Failed",
+};
+
+type BadgeTone = "neutral" | "low" | "medium" | "high" | "critical" | "ai" | "evidence" | "action";
+
+/** Provider outcome → badge tone. UNCONFIGURED is neutral (an honest
+ * configuration note, not a failure); real failures use the risk ramp. */
+export const DISCOVERY_PROVIDER_STATUS_TONE: Record<DiscoveryProviderStatus, BadgeTone> = {
+  COMPLETED: "low",
+  EMPTY: "neutral",
+  UNCONFIGURED: "neutral",
+  TIMEOUT: "medium",
+  RATE_LIMITED: "medium",
+  FAILED: "high",
 };

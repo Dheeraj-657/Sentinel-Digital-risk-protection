@@ -12,6 +12,7 @@ import { EntityDetail } from "./pages/EntityDetail";
 import { NewAnalysis } from "./pages/NewAnalysis";
 import { AnalysisJob } from "./pages/AnalysisJob";
 import { AnalysisHistory } from "./pages/AnalysisHistory";
+import { DiscoveryJob } from "./pages/DiscoveryJob";
 import { ScanNew } from "./pages/ScanNew";
 import { Scans } from "./pages/Scans";
 import { ScanDetail } from "./pages/ScanDetail";
@@ -35,6 +36,7 @@ export default function App() {
               <Route path="/analysis/new" element={<NewAnalysis />} />
               <Route path="/analysis/history" element={<AnalysisHistory />} />
               <Route path="/analysis/:jobId" element={<AnalysisJob />} />
+              <Route path="/discovery/:jobId" element={<DiscoveryJob />} />
               <Route path="/scan/new" element={<ScanNew />} />
               <Route path="/scans" element={<Scans />} />
               <Route path="/scans/:scanId" element={<ScanDetail />} />

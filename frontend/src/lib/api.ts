@@ -1,5 +1,8 @@
 import type {
   AnalysisJob,
+  DiscoveryJob,
+  DiscoveryJobListResponse,
+  DiscoveryQueryParams,
   M1Brand,
   M1BrandInput,
   M1Health,
@@ -20,6 +23,7 @@ import type {
   M3Source,
   M3SourceListResponse,
   JobStatus,
+  RelatedThreatsResponse,
   RiskLevel,
   ThreatDetail,
   ThreatListResponse,
@@ -183,6 +187,26 @@ export const m2 = {
       tenant,
       signal,
     }),
+
+  createDiscovery: (brandId: string, tenant: string, signal?: AbortSignal) =>
+    apiFetch<DiscoveryJob>("/api/v1/discovery", {
+      method: "POST",
+      body: { brand_id: brandId },
+      tenant,
+      signal,
+    }),
+
+  getDiscovery: (jobId: string, tenant: string, signal?: AbortSignal) =>
+    apiFetch<DiscoveryJob>(`/api/v1/discovery/${jobId}`, { tenant, signal }),
+
+  listDiscovery: (params: DiscoveryQueryParams, tenant: string, signal?: AbortSignal) =>
+    apiFetch<DiscoveryJobListResponse>(`/api/v1/discovery${queryString(params)}`, {
+      tenant,
+      signal,
+    }),
+
+  getRelated: (threatId: string, tenant: string, signal?: AbortSignal) =>
+    apiFetch<RelatedThreatsResponse>(`/api/v1/threats/${threatId}/related`, { tenant, signal }),
 };
 
 // ---------- Module 3 (Entity & Evidence, :8001 via proxy) ----------

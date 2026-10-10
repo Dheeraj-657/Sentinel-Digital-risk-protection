@@ -51,6 +51,10 @@ export function createApiMock() {
       listThreats: asyncFn(),
       getThreat: asyncFn(),
       updateThreatStatus: asyncFn(),
+      createDiscovery: asyncFn(),
+      getDiscovery: asyncFn(),
+      listDiscovery: asyncFn(),
+      getRelated: asyncFn(),
     },
     m3: {
       health: asyncFn(),

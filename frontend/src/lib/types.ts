@@ -362,3 +362,120 @@ export interface M3SourceListResponse {
   limit: number;
   offset: number;
 }
+
+// ---------- Module 2 (Discovery jobs + related threats) ----------
+
+export type DiscoveryJobStatus = "QUEUED" | "RUNNING" | "COMPLETED" | "PARTIAL" | "FAILED";
+
+export interface DiscoveryQueryItem {
+  provider: string;
+  term: string;
+  /** Brand DNA signal the term was derived from. */
+  basis: string;
+}
+
+export type DiscoveryProviderStatus =
+  | "COMPLETED"
+  | "EMPTY"
+  | "UNCONFIGURED"
+  | "TIMEOUT"
+  | "RATE_LIMITED"
+  | "FAILED";
+
+export interface DiscoveryProviderOutcome {
+  provider: string;
+  status: DiscoveryProviderStatus;
+  candidate_count: number;
+  warning: string | null;
+  error: string | null;
+  latency_ms: number | null;
+}
+
+export interface DiscoveryCandidate {
+  providers: string[];
+  kind: string;
+  domain: string | null;
+  url: string | null;
+  title: string | null;
+  snippet: string | null;
+  /** Brand DNA signal this candidate was observed through. */
+  query_basis: string;
+  observed_at: string;
+  discovery_fingerprint: string | null;
+  entity_id: string | null;
+  evidence_id: string | null;
+  analysis_job_id: string | null;
+  analysis_status: string | null;
+}
+
+export interface DiscoveryJob {
+  job_id: string;
+  status: DiscoveryJobStatus;
+  brand_id: string;
+  queries: DiscoveryQueryItem[];
+  provider_outcomes: DiscoveryProviderOutcome[];
+  candidates: DiscoveryCandidate[];
+  source_ids: Record<string, string>;
+  duplicate_count: number;
+  warning_message: string | null;
+  created_at: string;
+  started_at: string | null;
+  completed_at: string | null;
+  error_code: string | null;
+  error_message: string | null;
+}
+
+export interface DiscoveryJobListItem {
+  job_id: string;
+  status: DiscoveryJobStatus;
+  brand_id: string;
+  duplicate_count: number;
+  candidate_count: number;
+  created_at: string;
+  completed_at: string | null;
+  error_code: string | null;
+}
+
+export interface DiscoveryJobListResponse {
+  items: DiscoveryJobListItem[];
+  total: number;
+  limit: number;
+  offset: number;
+}
+
+export type DiscoveryQueryParams = {
+  status?: DiscoveryJobStatus;
+  limit?: number;
+  offset?: number;
+};
+
+// ---------- Module 2 (Evidence-backed related threats) ----------
+
+export interface SharedAttribute {
+  /** Identifier key present on both entities (e.g. "domain", "handle"). */
+  key: string;
+  /** The exact shared value — no normalization or similarity. */
+  value: string;
+}
+
+export type RelatedThreatRelationType = "SHARED_DOMAIN" | "SHARED_IDENTIFIER";
+
+export interface RelatedThreatItem {
+  threat_id: string;
+  entity_id: string;
+  entity_display_name: string | null;
+  relation_type: RelatedThreatRelationType;
+  /** How the relation was established — EXACT_ATTRIBUTE_MATCH. */
+  basis: string;
+  shared_attribute: SharedAttribute;
+  evidence_ids: string[];
+  target_evidence_ids: string[];
+}
+
+export interface RelatedThreatsResponse {
+  threat_id: string;
+  items: RelatedThreatItem[];
+  total: number;
+  /** Non-fatal notes — never silent skips. */
+  warnings: string[];
+}

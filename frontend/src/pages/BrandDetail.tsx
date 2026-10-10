@@ -4,7 +4,8 @@ import { useApi, errorMessage } from "../lib/hooks";
 import { m1, m2 } from "../lib/api";
 import { useTenant } from "../lib/tenant";
 import { brandUuidFromCuid } from "../lib/brand-bridge";
-import { M1_ENTITY_TYPE_LABEL, formatDateTime } from "../lib/format";
+import { M1_ENTITY_TYPE_LABEL, DISCOVERY_JOB_STATUS_LABEL, DISCOVERY_JOB_STATUS_TONE, formatDateTime } from "../lib/format";
+import type { DiscoveryJobListItem } from "../lib/types";
 import {
   Badge,
   Button,
@@ -30,10 +31,13 @@ export function BrandDetail() {
   const derivedUuid = brandUuidFromCuid(brandId);
   const threats = useApi(() => m2.listThreats({ limit: 200 }, tenant), [tenant]);
   const scans = useApi(() => m1.listScans({ brand: brandId, limit: 20 }), [brandId]);
+  const discoveryRuns = useApi(() => m2.listDiscovery({ limit: 50 }, tenant), [tenant]);
   const [editOpen, setEditOpen] = useState(false);
   const [confirmingDelete, setConfirmingDelete] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
+  const [discovering, setDiscovering] = useState(false);
+  const [discoverError, setDiscoverError] = useState<string | null>(null);
 
   if (brand.loading) {
     return (
@@ -80,6 +84,21 @@ export function BrandDetail() {
     ? threats.data.items.filter((threat) => threat.brand_id === derivedUuid)
     : [];
   const openCount = brandThreats.filter((threat) => threat.status === "OPEN").length;
+  const brandRuns: DiscoveryJobListItem[] = discoveryRuns.data
+    ? discoveryRuns.data.items.filter((run) => run.brand_id === derivedUuid)
+    : [];
+
+  const discover = async () => {
+    setDiscovering(true);
+    setDiscoverError(null);
+    try {
+      const job = await m2.createDiscovery(derivedUuid, tenant);
+      navigate(`/discovery/${job.job_id}`);
+    } catch (err) {
+      setDiscoverError(errorMessage(err));
+      setDiscovering(false);
+    }
+  };
 
   const remove = async () => {
     setDeleting(true);
@@ -100,7 +119,10 @@ export function BrandDetail() {
         description="Brand identity and monitored-asset DNA. The risk engine scores discovered entities against this definition via uuid5-derived brand identity."
         actions={
           <div className="flex flex-wrap items-center gap-2">
-            <Button variant="primary" onClick={() => setEditOpen((open) => !open)}>
+            <Button variant="primary" onClick={discover} disabled={discovering}>
+              {discovering ? "Discovering…" : "Discover threats"}
+            </Button>
+            <Button variant="default" onClick={() => setEditOpen((open) => !open)}>
               {editOpen ? "Close editor" : "Edit brand"}
             </Button>
             {confirmingDelete ? (
@@ -127,6 +149,12 @@ export function BrandDetail() {
       {actionError ? (
         <p role="alert" className="mb-4 rounded border border-risk-critical/40 bg-risk-critical/10 px-4 py-3 text-xs text-risk-critical">
           {actionError}
+        </p>
+      ) : null}
+
+      {discoverError ? (
+        <p role="alert" className="mb-4 rounded border border-risk-critical/40 bg-risk-critical/10 px-4 py-3 text-xs text-risk-critical">
+          Discovery could not start: {discoverError}
         </p>
       ) : null}
 
@@ -316,6 +344,84 @@ export function BrandDetail() {
           />
         ) : (
           <ThreatTable threats={brandThreats} showBrand={false} />
+        )}
+      </Card>
+
+      <Card className="mt-4">
+        <CardHeader
+          title="Discovery runs"
+          description="Automatic threat-discovery jobs for this brand. Each run queries public sources with bounded brand-DNA terms — candidates are observations, not verdicts."
+        />
+        {discoveryRuns.loading ? (
+          <TableSkeleton rows={2} />
+        ) : discoveryRuns.error ? (
+          <ErrorState
+            error={discoveryRuns.error}
+            onRetry={discoveryRuns.reload}
+            context="discovery runs"
+          />
+        ) : brandRuns.length === 0 ? (
+          <EmptyState
+            title="No discovery runs yet"
+            description="Discover threats to sweep public sources for this brand's lookalikes — no manual URLs required."
+            action={
+              <Button variant="primary" onClick={discover} disabled={discovering}>
+                {discovering ? "Discovering…" : "Discover threats"}
+              </Button>
+            }
+          />
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-left text-sm">
+              <thead>
+                <tr className="border-b border-line-soft text-[11px] uppercase tracking-widest text-faint">
+                  <th scope="col" className="px-4 py-2.5 font-medium sm:px-5">
+                    Job
+                  </th>
+                  <th scope="col" className="px-4 py-2.5 font-medium">
+                    Status
+                  </th>
+                  <th scope="col" className="px-4 py-2.5 font-medium">
+                    Candidates
+                  </th>
+                  <th scope="col" className="hidden px-4 py-2.5 font-medium sm:table-cell">
+                    Duplicates
+                  </th>
+                  <th scope="col" className="hidden px-4 py-2.5 font-medium lg:table-cell">
+                    Created
+                  </th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-line-soft">
+                {brandRuns.map((run) => (
+                  <tr key={run.job_id} className="transition hover:bg-raised/50">
+                    <td className="px-4 py-3 sm:px-5">
+                      <Link
+                        to={`/discovery/${run.job_id}`}
+                        className="font-mono text-xs text-fg hover:text-action"
+                      >
+                        {run.job_id.slice(0, 8)}…
+                      </Link>
+                    </td>
+                    <td className="px-4 py-3">
+                      <Badge tone={DISCOVERY_JOB_STATUS_TONE[run.status]}>
+                        {DISCOVERY_JOB_STATUS_LABEL[run.status]}
+                      </Badge>
+                    </td>
+                    <td className="px-4 py-3 font-mono text-xs text-muted">
+                      {run.candidate_count}
+                    </td>
+                    <td className="hidden px-4 py-3 font-mono text-xs text-muted sm:table-cell">
+                      {run.duplicate_count}
+                    </td>
+                    <td className="hidden whitespace-nowrap px-4 py-3 text-xs text-muted lg:table-cell">
+                      {formatDateTime(run.created_at)}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         )}
       </Card>
     </>
