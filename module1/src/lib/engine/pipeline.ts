@@ -12,7 +12,7 @@ import { collectIntelligence, getIntelMode } from "./providers/registry";
 import { evaluateSignals } from "./rules";
 import { scoreSignals } from "./scoring";
 import { computeConfidence } from "./confidence";
-import { recommendActions } from "./actions";
+import { primaryIntelGaps, recommendActions } from "./actions";
 import type { ExplanationInput } from "@/lib/ai/prompt";
 
 export type Explainer = (input: ExplanationInput) => Promise<AiAssessment>;
@@ -59,7 +59,8 @@ export async function analyzeEntity(opts: AnalyzeOptions): Promise<AnalysisRepor
   lap("confidence", "Confidence calculated", `${conf.confidenceScore}/100`);
 
   // 6. Recommended actions (deterministic)
-  const actions = recommendActions(entity, score.riskLevel, signals, { isOfficial, confidence: conf.confidenceScore });
+  const primaryGaps = isOfficial ? [] : primaryIntelGaps(entity, results);
+  const actions = recommendActions(entity, score.riskLevel, signals, { isOfficial, confidence: conf.confidenceScore, primaryGaps });
   lap("actions", "Actions selected", `${actions.length} actions`);
 
   // 7. AI explanation (grounded; cannot alter the above)
@@ -78,6 +79,7 @@ export async function analyzeEntity(opts: AnalyzeOptions): Promise<AnalysisRepor
     signals,
     actions,
     providerGaps,
+    primaryGaps,
   });
   lap("explain", aiAssessment.source === "GROQ" ? "AI assessment (Groq)" : "Explanation (template fallback)", aiAssessment.model ?? aiAssessment.notes[0] ?? "");
 

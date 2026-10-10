@@ -14,7 +14,7 @@ import { Investigations } from "./Investigations";
 import { ThreatGraph } from "./ThreatGraph";
 import { DiscoveryCenter } from "./DiscoveryCenter";
 import { AppShell } from "../components/layout";
-import { m1, m2, m3, m4 } from "../lib/api";
+import { ApiError, m1, m2, m3, m4 } from "../lib/api";
 import { DEFAULT_TENANT, TenantProvider } from "../lib/tenant";
 import { ToastProvider } from "../components/toast";
 import { brandUuidFromCuid } from "../lib/brand-bridge";
@@ -261,6 +261,42 @@ describe("Investigation workspace", () => {
     expect((screen.getByLabelText("Compare with") as HTMLSelectElement).value).toBe(THREAT_B);
   });
 
+  it("keeps verdicts usable and says so when the evidence store is down", async () => {
+    vi.mocked(m3.getEntity).mockRejectedValue(new Error("Evidence store (Module 3) is not reachable at http://localhost:8001."));
+    vi.mocked(m3.listEvidence).mockRejectedValue(new Error("Evidence store (Module 3) is not reachable at http://localhost:8001."));
+    renderAt(`/investigate/${ENTITY_A}`, workspaceRoutes);
+    expect(await screen.findByText("Evidence store unavailable.")).toBeTruthy();
+    expect(screen.getAllByText(/Module 3\) is not reachable/).length).toBeGreaterThan(0);
+    expect((await screen.findAllByText("64")).length).toBeGreaterThan(0); // verdict still shown as stored
+    expect(await screen.findByText(/Whether evidence exists is unknown/)).toBeTruthy();
+    expect(screen.queryByText(/No evidence is stored for this entity/)).toBeNull();
+  });
+
+  it("treats relations with engine warnings as unknown, not as unconnected", async () => {
+    vi.mocked(m2.getRelated).mockResolvedValue({
+      threat_id: THREAT_A, total: 0, items: [],
+      warnings: ["Target entity could not be resolved; no relations were computed."],
+    });
+    renderAt(`/investigate/${ENTITY_A}?tab=connections`, workspaceRoutes);
+    expect(await screen.findByText("Relations could not be fully computed")).toBeTruthy();
+    expect(screen.queryByText("No shared identifiers")).toBeNull();
+  });
+
+  it("never calls a brand 'unregistered' when the registry is unreachable", async () => {
+    vi.mocked(m1.listBrands).mockRejectedValue(new Error("Brand service (Module 1) is not reachable at http://localhost:3000."));
+    renderAt(`/investigate/${ENTITY_A}`, workspaceRoutes);
+    expect(await screen.findByText(/could not be reached/)).toBeTruthy();
+    expect(screen.queryByText(/not in the brand registry/)).toBeNull();
+    expect(screen.queryByText(/unregistered brand/)).toBeNull();
+  });
+
+  it("does not degrade for a genuinely missing entity", async () => {
+    vi.mocked(m3.getEntity).mockRejectedValue(new ApiError(404, "NOT_FOUND", "Entity not found."));
+    renderAt(`/investigate/${ENTITY_A}`, workspaceRoutes);
+    expect(await screen.findByText("Back to investigations")).toBeTruthy();
+    expect(screen.queryByText("Evidence store unavailable.")).toBeNull();
+  });
+
   it("says plainly when an entity has no verdict", async () => {
     vi.mocked(m2.listThreats).mockResolvedValue({ items: [], total: 0, limit: 200, offset: 0 });
     renderAt(`/investigate/${ENTITY_A}?tab=risk`, workspaceRoutes);
@@ -351,6 +387,13 @@ describe("Discovery center", () => {
     fireEvent.click(screen.getByRole("button", { name: "Discover threats" }));
     expect(await screen.findByText("job page")).toBeTruthy();
     expect(m2.createDiscovery).toHaveBeenCalledWith(BRAND_UUID, DEFAULT_TENANT);
+  });
+
+  it("reports discovery history as unknown when the risk engine is down", async () => {
+    vi.mocked(m2.listDiscovery).mockRejectedValue(new Error("Risk engine (Module 2) is not reachable."));
+    renderAt("/discovery", <Route path="*" element={<DiscoveryCenter />} />);
+    expect(await screen.findByText(/Provider status is unknown/)).toBeTruthy();
+    expect(screen.queryByText(/No discovery has run yet/)).toBeNull();
   });
 
   it("separates discovered from manually registered entities", async () => {

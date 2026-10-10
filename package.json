@@ -11,6 +11,7 @@
     "dev": "node scripts/trustgraph.mjs dev",
     "start": "node scripts/trustgraph.mjs dev",
     "status": "node scripts/trustgraph.mjs status",
-    "test": "node scripts/trustgraph.mjs test"
+    "test": "node scripts/trustgraph.mjs test",
+    "e2e": "node scripts/e2e-smoke.mjs"
   }
 }

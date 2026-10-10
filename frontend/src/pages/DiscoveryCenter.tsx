@@ -238,6 +238,10 @@ export function DiscoveryCenter() {
           />
           {latest.loading || jobs.loading ? (
             <TableSkeleton rows={3} cols={3} />
+          ) : jobs.error || latest.error ? (
+            <p role="alert" className="px-4 py-4 text-[13px] text-risk-medium sm:px-5">
+              Discovery history could not be loaded ({errorMessage(jobs.error ?? latest.error)}). Provider status is unknown.
+            </p>
           ) : !latest.data ? (
             <p className="px-4 py-4 text-[13px] text-muted sm:px-5">No discovery has run yet, so no provider has been exercised.</p>
           ) : (

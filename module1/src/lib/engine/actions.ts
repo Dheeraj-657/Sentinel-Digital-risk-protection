@@ -2,7 +2,26 @@
  * Deterministic recommended actions, driven by risk level, entity type and specific signals.
  * The AI layer may explain/prioritise these, but cannot add or remove them.
  */
-import type { NormalizedEntity, RecommendedAction, RiskLevel, Signal } from "./types";
+import type { EntityType, NormalizedEntity, ProviderKind, ProviderResult, RecommendedAction, RiskLevel, Signal } from "./types";
+
+/** The intelligence source that actually observes each entity type. */
+const PRIMARY_INTEL: Record<EntityType, ProviderKind> = {
+  PROFILE: "social-intel",
+  APP: "app-intel",
+  WEBSITE: "web-content",
+  DOMAIN: "domain-intel",
+};
+
+/**
+ * Names of primary sources that produced no usable data for this entity.
+ * When this is non-empty a low score means "not enough evidence", never "safe".
+ */
+export function primaryIntelGaps(entity: NormalizedEntity, results: Pick<ProviderResult, "kind" | "status" | "providerName">[]): string[] {
+  const kind = PRIMARY_INTEL[entity.type];
+  const runs = results.filter((r) => r.kind === kind);
+  if (runs.length === 0) return [`${kind} (no provider configured)`];
+  return runs.some((r) => r.status === "OK") ? [] : runs.map((r) => r.providerName);
+}
 
 const PRIORITY_ORDER = { IMMEDIATE: 0, HIGH: 1, MEDIUM: 2, LOW: 3 } as const;
 
@@ -10,7 +29,7 @@ export function recommendActions(
   entity: NormalizedEntity,
   level: RiskLevel,
   signals: Signal[],
-  opts: { isOfficial: boolean; confidence: number },
+  opts: { isOfficial: boolean; confidence: number; primaryGaps?: string[] },
 ): RecommendedAction[] {
   const actions: RecommendedAction[] = [];
   const has = (...ids: string[]) => signals.filter((s) => ids.includes(s.ruleId)).map((s) => s.id);
@@ -53,11 +72,22 @@ export function recommendActions(
       add({ action: "Add to watchlist and re-scan in 48 hours", priority: "MEDIUM", rationale: "Scam infrastructure often escalates shortly after setup.", basedOn: top });
       break;
     case "LOW":
-      add({ action: "Monitor", priority: "MEDIUM", rationale: "Minor indicators only; track for changes.", basedOn: top });
-      add({ action: "Re-scan in 7 days", priority: "LOW", rationale: "Detect escalation such as new content or threat-feed listings.", basedOn: top });
-      break;
     case "VERY_LOW":
-      add({ action: "Monitor", priority: "LOW", rationale: "No meaningful risk indicators detected.", basedOn: [] });
+      if (opts.primaryGaps?.length) {
+        // Missing intelligence is not evidence of safety.
+        add({
+          action: "Collect missing intelligence before clearing",
+          priority: "MEDIUM",
+          rationale: `The primary source for this ${entity.type.toLowerCase()} (${opts.primaryGaps.join(", ")}) returned no data, so the low score reflects missing evidence, not a clean result.`,
+          basedOn: top,
+        });
+        add({ action: "Re-scan once more intelligence is available", priority: "LOW", rationale: "Re-run the engine after the primary source can observe the entity.", basedOn: top });
+      } else if (level === "LOW") {
+        add({ action: "Monitor", priority: "MEDIUM", rationale: "Minor indicators only; track for changes.", basedOn: top });
+        add({ action: "Re-scan in 7 days", priority: "LOW", rationale: "Detect escalation such as new content or threat-feed listings.", basedOn: top });
+      } else {
+        add({ action: "Monitor", priority: "LOW", rationale: "No meaningful risk indicators in the intelligence that was available.", basedOn: [] });
+      }
       break;
   }
 

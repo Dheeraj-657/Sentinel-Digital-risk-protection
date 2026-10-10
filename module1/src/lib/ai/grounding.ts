@@ -6,6 +6,7 @@
  *  - a summary that names a different risk level than the computed one is rejected
  */
 import { z } from "zod";
+import { primaryGapCaveat } from "./fallback";
 import type { AiAssessment, RiskLevel } from "@/lib/engine/types";
 import { RISK_LEVEL_META } from "@/lib/engine/constants";
 import type { ExplanationInput } from "./prompt";
@@ -95,7 +96,18 @@ export function groundAssessment(
   const actionNotes = out.actionNotes
     .map((a) => ({ actionId: a.actionId.trim().toUpperCase(), note: a.note.trim() }))
     .filter((a) => actionIds.has(a.actionId) && !invented(a.note).length);
-  const caveats = out.caveats.map((c) => c.trim()).filter((c) => c && !invented(c).length).slice(0, 3);
+  const gapCaveat = primaryGapCaveat(x);
+  if (gapCaveat) {
+    // Missing primary intel: the model may not call the entity safe/legitimate.
+    const claimsSafe = [out.summary, ...keyFindings.map((k) => k.text), ...actionNotes.map((a) => a.note)].some((t) =>
+      /\b(?:is|appears|looks|seems)\s+(?:to be\s+)?(?:safe|legitimate|benign|clean|trustworthy|genuine)\b|\bno (?:risk|threat)\b/i.test(t),
+    );
+    if (claimsSafe) return { ok: false, reason: "AI called the entity safe although its primary intelligence source returned no data" };
+  }
+  const caveats = [
+    ...(gapCaveat ? [gapCaveat] : []),
+    ...out.caveats.map((c) => c.trim()).filter((c) => c && !invented(c).length),
+  ].slice(0, 3);
 
   return { ok: true, value: { summary: out.summary.trim(), keyFindings, actionNotes, caveats, model, source: "GROQ", notes } };
 }

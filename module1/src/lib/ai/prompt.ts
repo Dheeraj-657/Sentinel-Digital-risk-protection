@@ -13,6 +13,8 @@ export interface ExplanationInput {
   signals: Signal[];
   actions: RecommendedAction[];
   providerGaps: string[];
+  /** Primary source(s) for this entity type that returned nothing — low scores are then NOT clean results. */
+  primaryGaps?: string[];
 }
 
 export const SYSTEM_PROMPT = `You are a senior threat-intelligence analyst writing the "AI Assessment" section of a Digital Risk Protection report.
@@ -23,7 +25,8 @@ STRICT RULES — violations cause your output to be discarded:
 3. Every key finding must cite the signal ids (e.g. "S1") that support it. Do not cite ids that do not exist.
 4. Do not write any number unless it appears verbatim in the input JSON.
 5. Signals with negative impact are mitigating evidence — mention them honestly.
-6. If evidence is thin or some sources returned no data, say so in caveats.
+6. If evidence is thin or some sources returned no data, say so in caveats. If primaryIntelGaps is non-empty, \
+state that a low score reflects missing evidence, never that the entity is safe or legitimate.
 7. Be concise, specific and professional. No markdown.
 
 Return ONLY a JSON object with exactly this shape:
@@ -65,6 +68,7 @@ export function buildUserPrompt(x: ExplanationInput): string {
     })),
     recommendedActions: x.actions.map((a) => ({ id: a.id, action: a.action, priority: a.priority })),
     dataGaps: x.providerGaps,
+    primaryIntelGaps: x.primaryGaps ?? [],
     confidenceFactors: x.confidenceFactors.map((f) => `${f.label}: ${f.detail}`),
   };
   return `Write the AI assessment for this analysis. Input JSON:\n${JSON.stringify(payload, null, 2)}`;

@@ -118,8 +118,9 @@ export function ThreatGraph() {
       brands: brands.data?.items ?? [],
       brandForUuid: (uuid) => findBrandForUuid(brands.data?.items ?? [], uuid),
       related: relations.map,
+      brandRegistryUnavailable: !!brands.error,
     });
-  }, [threats.data, entities.data, brands.data, relations.map]);
+  }, [threats.data, entities.data, brands.data, brands.error, relations.map]);
 
   const presentTypes = useMemo(
     () => [...new Set((full?.nodes ?? []).filter((n) => n.kind === "entity").map((n) => n.entityType ?? "OTHER"))],
@@ -683,7 +684,11 @@ function DetailPanel({
               <Link to={`/brands/${node.brand.id}`} className="text-xs text-action hover:text-fg">Open brand</Link>
             </>
           ) : (
-            <p className="text-muted">This brand id is not in the brand registry (it may have been deleted).</p>
+            <p className="text-muted">
+              {node.label.includes("registry unavailable")
+                ? "The brand registry (Module 1) could not be reached, so this brand's details are unknown."
+                : "This brand id is not in the brand registry (it may have been deleted)."}
+            </p>
           )
         ) : (
           <p className="text-muted">

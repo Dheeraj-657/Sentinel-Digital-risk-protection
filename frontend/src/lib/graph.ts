@@ -72,6 +72,8 @@ export function buildGraph(input: {
   brands: M1Brand[];
   brandForUuid: (uuid: string) => M1Brand | undefined;
   related: Map<string, RelatedThreatItem[]>;
+  /** True when the brand registry could not be reached: unknown, not "unregistered". */
+  brandRegistryUnavailable?: boolean;
 }): Graph {
   const entityById = new Map(input.entities.map((e) => [e.entity_id, e]));
   const nodes = new Map<string, GraphNode>();
@@ -107,7 +109,9 @@ export function buildGraph(input: {
       nodes.set(bKey, {
         id: bKey,
         kind: "brand",
-        label: brand?.name ?? `Unregistered brand ${t.brand_id.slice(0, 8)}`,
+        label:
+          brand?.name ??
+          (input.brandRegistryUnavailable ? `Brand ${t.brand_id.slice(0, 8)} (registry unavailable)` : `Unregistered brand ${t.brand_id.slice(0, 8)}`),
         level: null,
         score: null,
         brand,

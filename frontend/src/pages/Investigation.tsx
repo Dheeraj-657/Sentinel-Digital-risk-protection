@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link, useParams, useSearchParams } from "react-router-dom";
-import { m1, m2, m3 } from "../lib/api";
-import { useApi } from "../lib/hooks";
+import { ApiError, m1, m2, m3 } from "../lib/api";
+import { errorMessage, useApi } from "../lib/hooks";
 import { useTenant } from "../lib/tenant";
 import { findBrandForUuid } from "../lib/brand-bridge";
 import {
@@ -114,6 +114,10 @@ export function Investigation() {
     (brandUuid: string): M1Brand | undefined => findBrandForUuid(brands.data?.items ?? [], brandUuid),
     [brands.data],
   );
+  // "Unregistered" only when the registry answered; an unreachable registry is unknown.
+  const brandLabel = (uuid: string): string =>
+    brandFor(uuid)?.name ??
+    (brands.error ? `brand ${shortId(uuid)} (registry unavailable)` : brands.loading ? `brand ${shortId(uuid)}` : `unregistered brand ${shortId(uuid)}`);
 
   // Evidence focus from analyst citations / factor chips.
   const [focusEvidence, setFocusEvidence] = useState<string | null>(searchParams.get("ev"));
@@ -147,7 +151,19 @@ export function Investigation() {
       </div>
     );
   }
-  if (entity.error || !entity.data) {
+  // Evidence store unreachable (5xx/network) but the risk engine still has verdicts:
+  // keep the workspace usable and say exactly what is missing.
+  const storeDown = !!entity.error && !(entity.error instanceof ApiError && entity.error.status < 500);
+  if (storeDown && threatList.loading) {
+    return (
+      <div className="space-y-4" aria-busy="true" aria-label="Loading investigation">
+        <Skeleton className="h-16 w-2/3" />
+        <Skeleton className="h-64 w-full" />
+      </div>
+    );
+  }
+  const degraded = storeDown && verdicts.length > 0;
+  if (!degraded && (entity.error || !entity.data)) {
     return (
       <Card>
         <ErrorState error={entity.error ?? new Error("Entity not found.")} onRetry={entity.reload} context="this entity" />
@@ -160,10 +176,19 @@ export function Investigation() {
     );
   }
 
-  const e = entity.data;
+  const e: M3Entity = entity.data ?? {
+    entity_id: entityId,
+    tenant_id: tenant,
+    entity_type: "OTHER",
+    display_name: `Entity ${shortId(entityId)} (details unavailable)`,
+    identifiers: {},
+    attributes: {},
+  };
   const t = threat.data;
   const brand = t ? brandFor(t.brand_id) : undefined;
   const relatedItems = related.data?.items ?? [];
+  // Relations that failed or came back with engine warnings are unknown, not "none".
+  const relationsIncomplete = !!related.error || (related.data?.warnings?.length ?? 0) > 0;
   const usage = new Map<string, FactorType[]>();
   for (const ref of t?.evidence_references ?? []) usage.set(ref.evidence_id, ref.factor_types);
   const sourceName = new Map((sources.data?.items ?? []).map((s) => [s.source_id, s.name]));
@@ -173,7 +198,7 @@ export function Investigation() {
       .filter((v) => v.threat_id !== selectedId)
       .map((v) => ({
         threatId: v.threat_id,
-        label: `Same entity vs ${brandFor(v.brand_id)?.name ?? `unregistered brand ${shortId(v.brand_id)}`} (${v.risk_score} ${RISK_LEVEL_LABEL[v.risk_level]})`,
+        label: `Same entity vs ${brandLabel(v.brand_id)} (${v.risk_score} ${RISK_LEVEL_LABEL[v.risk_level]})`,
       })),
     ...uniqueBy(
       relatedItems.filter((r) => r.entity_id !== entityId),
@@ -189,12 +214,26 @@ export function Investigation() {
 
   return (
     <div>
+      {degraded ? (
+        <div role="alert" className="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-lg border border-risk-medium/40 bg-risk-medium/5 px-4 py-3 text-[13px]">
+          <p className="min-w-0 text-fg">
+            <span className="font-semibold">Evidence store unavailable.</span>{" "}
+            <span className="text-muted">
+              Entity details, identifiers and evidence can't be loaded ({errorMessage(entity.error)}). Verdicts below come from the
+              risk engine; nothing here is inferred from the missing data.
+            </span>
+          </p>
+          <button type="button" onClick={() => { entity.reload(); evidence.reload(); }} className="rounded-md border border-line px-2.5 py-1 text-xs text-fg hover:border-action/60">
+            Retry
+          </button>
+        </div>
+      ) : null}
       <EntityHeader
         entity={e}
         verdicts={verdicts}
         selectedId={selectedId}
         onSelect={selectVerdict}
-        brandName={(uuid) => brandFor(uuid)?.name ?? `unregistered brand ${shortId(uuid)}`}
+        brandName={brandLabel}
         threat={t}
         verdictsLoading={threatList.loading}
       />
@@ -204,7 +243,13 @@ export function Investigation() {
           <div role="tablist" aria-label="Investigation sections" className="mb-4 flex gap-1 overflow-x-auto border-b border-line-soft">
             {TABS.map((item) => {
               const count =
-                item.id === "evidence" ? evidence.data?.length : item.id === "connections" ? relatedItems.length : undefined;
+                item.id === "evidence"
+                  ? evidence.data?.length
+                  : item.id === "connections"
+                    ? relationsIncomplete && relatedItems.length === 0
+                      ? "?"
+                      : relatedItems.length
+                    : undefined;
               return (
                 <button
                   key={item.id}
@@ -234,9 +279,12 @@ export function Investigation() {
                 threatLoading={threat.loading || threatList.loading}
                 threatError={threat.error ?? threatList.error}
                 brand={brand}
+                brandsError={brands.error}
                 evidence={evidence.data ?? []}
                 evidenceLoading={evidence.loading}
+                evidenceError={evidence.error}
                 relatedCount={relatedItems.filter((r) => r.entity_id !== entityId).length}
+                relationsIncomplete={relationsIncomplete}
                 onTab={setTab}
               />
             ) : tab === "evidence" ? (
@@ -263,7 +311,7 @@ export function Investigation() {
                 onCite={citeEvidence}
               />
             ) : (
-              <HistoryTab entity={e} verdicts={verdicts} brandName={(uuid) => brandFor(uuid)?.name ?? `unregistered brand ${shortId(uuid)}`} />
+              <HistoryTab entity={e} verdicts={verdicts} brandName={brandLabel} />
             )}
           </div>
         </div>
@@ -417,9 +465,12 @@ function OverviewTab({
   threatLoading,
   threatError,
   brand,
+  brandsError,
   evidence,
   evidenceLoading,
+  evidenceError,
   relatedCount,
+  relationsIncomplete,
   onTab,
 }: {
   entity: M3Entity;
@@ -427,9 +478,12 @@ function OverviewTab({
   threatLoading: boolean;
   threatError: Error | null;
   brand: M1Brand | undefined;
+  brandsError: Error | null;
   evidence: M3Evidence[];
   evidenceLoading: boolean;
+  evidenceError: Error | null;
   relatedCount: number;
+  relationsIncomplete: boolean;
   onTab: (tab: Tab) => void;
 }) {
   const byType = new Map<string, number>();
@@ -479,6 +533,11 @@ function OverviewTab({
         <div className="space-y-3 px-4 py-4 text-[13px] sm:px-5">
           {!threat ? (
             <p className="text-muted">A brand is attached once a verdict exists.</p>
+          ) : !brand && brandsError ? (
+            <p className="text-risk-medium">
+              The brand registry (Module 1) could not be reached ({errorMessage(brandsError)}), so the brand reference for{" "}
+              {shortId(threat.brand_id)} is unknown.
+            </p>
           ) : !brand ? (
             <p className="text-muted">
               The verdict's brand ({shortId(threat.brand_id)}) is not in the brand registry. It may have been deleted.
@@ -521,6 +580,11 @@ function OverviewTab({
         <div className="space-y-3 px-4 py-4 text-[13px] sm:px-5">
           {evidenceLoading ? (
             <Skeleton className="h-12 w-full" />
+          ) : evidenceError ? (
+            <p className="text-risk-medium">
+              Evidence could not be loaded ({errorMessage(evidenceError)}). Whether evidence exists is unknown — this is not the
+              same as having none.
+            </p>
           ) : evidence.length === 0 ? (
             <p className="text-muted">No evidence is stored for this entity. Without evidence the engine cannot score it.</p>
           ) : (
@@ -571,7 +635,9 @@ function OverviewTab({
           </div>
           <p className="border-t border-line-soft pt-3">
             <button type="button" onClick={() => onTab("connections")} className="text-fg hover:text-action">
-              {relatedCount} other entit{relatedCount === 1 ? "y shares" : "ies share"} an exact identifier
+              {relationsIncomplete && relatedCount === 0
+                ? "Relations could not be fully computed — see Connections"
+                : `${relatedCount} other entit${relatedCount === 1 ? "y shares" : "ies share"} an exact identifier`}
             </button>
           </p>
         </div>
@@ -906,7 +972,12 @@ function ConnectionsTab({
             </Link>
           }
         />
-        {others.length === 0 ? (
+        {others.length === 0 && warnings.length > 0 ? (
+          <EmptyState
+            title="Relations could not be fully computed"
+            description={`The risk engine reported: ${warnings.slice(0, 2).join(" ")} Unknown is not the same as unconnected.`}
+          />
+        ) : others.length === 0 ? (
           <EmptyState title="No shared identifiers" description="No other entity in this tenant stores the same domain or handle." />
         ) : (
           <ul className="divide-y divide-line-soft">

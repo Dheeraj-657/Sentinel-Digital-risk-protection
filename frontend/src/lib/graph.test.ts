@@ -105,6 +105,15 @@ describe("buildGraph", () => {
   });
 });
 
+describe("brand labels", () => {
+  it("says 'registry unavailable' instead of 'unregistered' when Module 1 is down", () => {
+    const g = (down: boolean) =>
+      buildGraph({ ...base, threats: [threat("t1", "A", "brand-1234567", 60)], related: new Map(), brandRegistryUnavailable: down });
+    expect(g(true).nodes.find((n) => n.kind === "brand")?.label).toBe("Brand brand-12 (registry unavailable)");
+    expect(g(false).nodes.find((n) => n.kind === "brand")?.label).toBe("Unregistered brand brand-12");
+  });
+});
+
 describe("clusterThreatIds", () => {
   it("sends each member's highest verdict, highest first", () => {
     const graph = buildGraph({

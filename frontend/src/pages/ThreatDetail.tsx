@@ -464,6 +464,11 @@ function RelatedThreats({ threatId }: { threatId: string }) {
           Related-threat lookup failed ({errorMessage(related.error)}) — relations stay hidden
           rather than guessed.
         </p>
+      ) : related.data && related.data.items.length === 0 && related.data.warnings.length > 0 ? (
+        <p role="alert" className="px-4 py-3.5 text-xs text-risk-medium sm:px-5">
+          Relations could not be fully computed: {related.data.warnings.slice(0, 2).join(" ")} Unknown is not the same as
+          unrelated.
+        </p>
       ) : related.data && related.data.items.length > 0 ? (
         <ul className="divide-y divide-line-soft">
           {related.data.items.map((item) => (

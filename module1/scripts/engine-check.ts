@@ -83,6 +83,37 @@ const verbose = process.argv.includes("-v");
 
   failures += await netGuardChecks();
 
+  // Missing intelligence must never read as "safe" (regression: app absent from store data
+  // previously produced "Very Low … No meaningful risk indicators detected" + Monitor).
+  {
+    const nova = normalizeBrand(DEMO_BRANDS.find((x) => x.name === "NovaPay")!);
+    const rep = await analyzeEntity({ entityType: "APP", input: "com.novapay.wallet.rewards", brand: nova, explain: async (x) => fallbackAssessment(x, "t"), mode: "demo" });
+    const acts = rep.recommendedActions.map((a) => a.action);
+    const checks: [string, boolean][] = [
+      ["score itself unchanged by the gap logic", rep.riskLevel === "VERY_LOW" || rep.riskLevel === "LOW"],
+      ["recommends collecting missing intel", acts.includes("Collect missing intelligence before clearing")],
+      ["never says 'no meaningful risk indicators'", !rep.recommendedActions.some((a) => /No meaningful risk indicators detected/.test(a.rationale))],
+      ["explanation caveat names the missing primary source", rep.aiAssessment.caveats.some((c) => c.includes("App Store Intelligence") && c.includes("not a clean result"))],
+      ["summary says unverified, not safe", /unverified, not safe|missing evidence/.test(rep.aiAssessment.summary) || rep.aiAssessment.caveats.length > 0],
+    ];
+    const official = await analyzeEntity({ entityType: "DOMAIN", input: "novapay.com", brand: nova, explain: async (x) => fallbackAssessment(x, "t"), mode: "demo" });
+    checks.push(["official asset still cleared as official", official.recommendedActions[0]?.action.startsWith("No action needed")]);
+    const appIn = {
+      entity: rep.entity, brandName: "NovaPay", riskScore: rep.riskScore, riskLevel: rep.riskLevel, confidenceScore: rep.confidenceScore,
+      categories: rep.categories, adjustments: rep.scoreAdjustments, confidenceFactors: rep.confidenceFactors, signals: rep.signals,
+      actions: rep.recommendedActions, providerGaps: [], primaryGaps: ["App Store Intelligence (demo)"],
+    };
+    const sig = rep.signals.filter((x) => x.impact > 0).map((x) => x.id);
+    const safeClaim = groundAssessment({ summary: "This app appears legitimate.", keyFindings: [{ text: "Brand in package name.", signalIds: sig }] }, appIn, "m");
+    checks.push(["grounding rejects 'appears legitimate' when primary intel is missing", !safeClaim.ok]);
+    const honest = groundAssessment({ summary: "Package embeds the brand; store data was unavailable.", keyFindings: [{ text: "Brand in package name.", signalIds: sig }] }, appIn, "m");
+    checks.push(["grounding forces the missing-intel caveat", honest.ok && honest.value.caveats[0]?.includes("not a clean result")]);
+    for (const [name, pass] of checks) {
+      if (!pass) failures++;
+      console.log(`${pass ? "✔" : "✘"} missing-intel: ${name}`);
+    }
+  }
+
   // Grounding guard
   const b = normalizeBrand(DEMO_BRANDS[0]);
   const r = await analyzeEntity({ entityType: "DOMAIN", input: "n0vapay-support.com", brand: b, explain: async (x) => fallbackAssessment(x, "t") });
