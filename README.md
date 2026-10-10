@@ -345,7 +345,8 @@ Everything below was executed end-to-end through the running UI before submissio
 3. **Investigation workspace** (`/investigate/{entityId}`): verdict per brand, brand reference, evidence (expandable, provenance), risk breakdown, exact-match connections, history. Ask the **AI Security Analyst** "Why was this entity classified as medium risk?"; click an `ev …` citation to jump to that evidence.
 4. **Threat graph** (`/graph`): zoom, pan, fit, filter; select a node to open its investigation or an edge to see the shared value and evidence; **Table** view as the accessible alternative. Linked clusters are labelled leads; campaign detection is not implemented in the backend.
 5. **Discovery** (`/discovery`): paste any URL, profile or app package into **Analyze a URL, profile or app** (type auto-detected; runs the Module 1 engine and opens its report), start discovery for a brand, see per-provider status, and filter entities by collection source and analysis status.
-6. **Campaigns and comparisons**: in the workspace analyst, **Summarize a potential campaign** (the verdict plus every verdict the engine links to it by an exact shared identifier) and **Compare these two reports**; in the threat graph, **Summarize potential campaign** on any linked cluster. Answers say which members are linked by what, which are not linked, and never call a grouping a confirmed campaign.
+6. **AI Security Analyst** (`/analyst`): ask about any report, **compare any two reports**, or **summarize a potential campaign** from a seed report and the reports the engine links to it.
+7. **Campaigns and comparisons in context**: in the workspace analyst, **Summarize a potential campaign** (the verdict plus every verdict the engine links to it by an exact shared identifier) and **Compare these two reports**; in the threat graph, **Summarize potential campaign** on any linked cluster. Answers say which members are linked by what, which are not linked, and never call a grouping a confirmed campaign.
 
 Full report, file list, workflow results and data-honesty table: [docs/MODULE4.md](docs/MODULE4.md).
 
@@ -462,7 +463,7 @@ Run from each module's directory; full commands and captured output are in
 |---|---|---|
 | **Everything** | `npm test` (repo root) | all 7 suites below pass |
 | End-to-end (live stack) | `npm run e2e` | **20/20 checks** (E2E 1–6); E2E 7 failure handling in docs/INTEGRATION.md |
-| Frontend unit tests | `npm run test` | **123/123 passed** |
+| Frontend unit tests | `npm run test` | **126/126 passed** |
 | Frontend types | `npm run typecheck` | clean (TS 5.9 strict) |
 | Frontend build | `npm run build` | ✓ (typecheck + production bundle) |
 | Module 2 risk engine + Module 4 analyst | `python -m pytest` | **177/177 passed** (incl. 29 analyst grounding/isolation/campaign tests) |

@@ -1,3 +1,9 @@
+> **Latest run (integration pass, 2026-10-10):** `npm test` from the repo root — all 7 suites
+> pass: backend 177, Module 3 89 + 1 skipped, Module 1 typecheck + 97 engine/SSRF/missing-intel
+> checks + brand checks, console typecheck + 126 tests; `npm run e2e` 20/20 against the live
+> stack; failure handling (each module stopped in turn) verified in the browser.
+> Details: [INTEGRATION.md](INTEGRATION.md#7-test-results-this-sandbox-final-run).
+
 # TRUSTGRAPH — Test & Build Report
 
 All results below were captured on **2026-10-09/10 (Windows 10, Node 24.18, Python

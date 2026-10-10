@@ -1,3 +1,6 @@
+> Superseded in part by the integration pass: campaign summaries, the `/analyst` page,
+> one-command startup and the security fixes are documented in [INTEGRATION.md](INTEGRATION.md).
+
 # Module 4 — Dashboard & AI Security Analyst
 
 **Scope:** complete Module 4 inside the existing combined console (`frontend/`), connected to the existing Module 1–3 services. Modules 1–3 are preserved; no business logic, schema, migration, enum, ID or event contract was changed.
