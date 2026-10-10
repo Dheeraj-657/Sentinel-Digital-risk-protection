@@ -255,7 +255,7 @@ export function DiscoveryJob() {
                     className="flex flex-wrap items-baseline gap-x-3 gap-y-1 px-4 py-2.5 sm:px-5"
                   >
                     <span className="font-mono text-xs text-fg">{query.term}</span>
-                    <span className="text-[11px] uppercase tracking-widest text-faint">
+                    <span className="text-[11px] text-faint">
                       {query.provider}
                     </span>
                     <span className="text-[11px] text-muted">basis: {query.basis}</span>

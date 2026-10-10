@@ -102,8 +102,8 @@ export function ThreatDetail() {
         actions={
           <div className="flex flex-wrap items-center gap-2">
             <Link
-              to={`/entities/${data.entity_id}`}
-              className="rounded border border-line bg-raised px-3 py-1.5 text-xs font-medium text-fg transition hover:border-action/60"
+              to={`/investigate/${data.entity_id}?threat=${data.threat_id}`}
+              className="rounded-md border border-line bg-raised/70 px-3 py-1.5 text-[13px] font-medium text-fg transition hover:border-action/60"
             >
               Investigate entity
             </Link>
@@ -152,7 +152,7 @@ export function ThreatDetail() {
         </dl>
 
         <div className="mt-4 flex flex-wrap items-center gap-2 border-t border-line-soft pt-4">
-          <span className="text-[11px] font-medium uppercase tracking-widest text-faint">
+          <span className="text-[11px] font-medium text-faint">
             Response
           </span>
           {data.status === "OPEN" ? (
@@ -305,7 +305,7 @@ function FactorBreakdown({ factors }: { factors: RiskFactor[] }) {
   );
 }
 
-function scoreLevel(score: number): "LOW" | "MEDIUM" | "HIGH" | "CRITICAL" {
+export function scoreLevel(score: number): "LOW" | "MEDIUM" | "HIGH" | "CRITICAL" {
   if (score > 75) return "CRITICAL";
   if (score > 50) return "HIGH";
   if (score > 25) return "MEDIUM";
@@ -564,7 +564,7 @@ function NextSteps({ threat }: { threat: ThreatDetailType }) {
   );
 }
 
-function recommendedSteps(threat: ThreatDetailType): string[] {
+export function recommendedSteps(threat: ThreatDetailType): string[] {
   const steps: string[] = [];
   if (threat.status === "DISMISSED") {
     steps.push("Threat is dismissed — no action required. Reopen if new evidence emerges.");

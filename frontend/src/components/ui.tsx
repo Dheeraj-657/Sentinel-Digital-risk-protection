@@ -19,7 +19,7 @@ export function Card({
   className?: string;
 }) {
   return (
-    <section className={cx("rounded-md border border-line-soft bg-panel", className)}>
+    <section className={cx("min-w-0 rounded-lg border border-line-soft bg-panel", className)}>
       {children}
     </section>
   );
@@ -37,7 +37,7 @@ export function CardHeader({
   return (
     <header className="flex flex-wrap items-start justify-between gap-3 border-b border-line-soft px-4 py-3 sm:px-5">
       <div>
-        <h2 className="text-sm font-semibold tracking-wide text-fg">{title}</h2>
+        <h2 className="text-[15px] font-semibold text-fg">{title}</h2>
         {description ? <p className="mt-0.5 text-xs text-muted">{description}</p> : null}
       </div>
       {actions ? <div className="flex items-center gap-2">{actions}</div> : null}
@@ -117,7 +117,7 @@ export function RiskScore({
       </span>
       <span
         className={cx(
-          "mt-1 text-[11px] font-semibold uppercase tracking-widest",
+          "mt-1 text-xs font-semibold",
           RISK_LEVEL_CLASS[level],
         )}
       >
@@ -182,7 +182,7 @@ export function M1RiskScore({
       </span>
       <span
         className={cx(
-          "mt-1 text-[11px] font-semibold uppercase tracking-widest",
+          "mt-1 text-xs font-semibold",
           M1_RISK_LEVEL_CLASS[level],
         )}
       >
@@ -279,7 +279,7 @@ export function ErrorState({
         <button
           type="button"
           onClick={onRetry}
-          className="mt-1 rounded border border-line bg-raised px-3 py-1.5 text-xs font-medium text-fg transition hover:border-action/60 hover:text-fg"
+          className="mt-1 rounded-md border border-line bg-raised px-3 py-1.5 text-xs font-medium text-fg transition hover:border-action/60 hover:text-fg"
         >
           Try again
         </button>
@@ -297,8 +297,8 @@ export function Button({
   variant?: "default" | "primary" | "danger" | "ghost";
 }) {
   const styles: Record<string, string> = {
-    default: "border-line bg-raised text-fg hover:border-action/60",
-    primary: "border-action/60 bg-action/15 text-action hover:bg-action/25",
+    default: "border-line bg-raised/70 text-fg hover:border-action/60 hover:bg-raised",
+    primary: "border-action bg-action font-semibold text-on-action hover:bg-action-strong hover:border-action-strong",
     danger: "border-risk-critical/50 bg-risk-critical/10 text-risk-critical hover:bg-risk-critical/20",
     ghost: "border-transparent bg-transparent text-muted hover:text-fg",
   };
@@ -306,7 +306,7 @@ export function Button({
     <button
       type="button"
       className={cx(
-        "inline-flex items-center gap-1.5 rounded border px-3 py-1.5 text-xs font-medium transition disabled:cursor-not-allowed disabled:opacity-50",
+        "inline-flex items-center gap-1.5 rounded-md border px-3 py-1.5 text-[13px] font-medium transition disabled:cursor-not-allowed disabled:opacity-50",
         styles[variant],
         className,
       )}
@@ -329,9 +329,9 @@ export function PageHeader({
   return (
     <div className="mb-6 flex flex-wrap items-end justify-between gap-3">
       <div>
-        <h1 className="text-xl font-bold tracking-tight text-fg">{title}</h1>
+        <h1 className="font-display text-2xl font-semibold text-fg">{title}</h1>
         {description ? (
-          <p className="mt-1 max-w-2xl text-xs leading-relaxed text-muted">{description}</p>
+          <p className="mt-1 max-w-2xl text-[13px] leading-relaxed text-muted">{description}</p>
         ) : null}
       </div>
       {actions ? <div className="flex flex-wrap items-center gap-2">{actions}</div> : null}
@@ -362,7 +362,7 @@ export function StatCard({
   };
   const body = (
     <>
-      <p className="text-[11px] font-medium uppercase tracking-widest text-faint">{label}</p>
+      <p className="text-xs font-medium text-muted">{label}</p>
       <p
         className={cx(
           "mt-1.5 font-condensed font-mono text-3xl font-bold leading-none",
@@ -378,7 +378,7 @@ export function StatCard({
     return (
       <Link
         to={to}
-        className="block rounded-md border border-line-soft bg-panel px-4 py-3.5 transition hover:border-action/60 hover:bg-raised/40 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-action"
+        className="block rounded-lg border border-line-soft bg-panel px-4 py-3.5 transition hover:border-action/60 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-action"
       >
         {body}
       </Link>
@@ -398,7 +398,7 @@ export function KeyValue({
 }) {
   return (
     <div className="flex min-w-0 flex-col gap-0.5">
-      <dt className="text-[11px] font-medium uppercase tracking-widest text-faint">{label}</dt>
+      <dt className="text-xs text-faint">{label}</dt>
       <dd className={cx("text-sm text-fg", mono && "font-mono text-xs break-all")}>{children}</dd>
     </div>
   );

@@ -86,7 +86,7 @@ export function BrandFormCard({
       <form onSubmit={submit} className="space-y-4 px-4 py-4 sm:px-5" noValidate>
         <div className="grid gap-4 sm:grid-cols-2">
           <div className="space-y-1.5 sm:col-span-2">
-            <label htmlFor="brand-name" className="block text-[11px] font-medium uppercase tracking-widest text-faint">
+            <label htmlFor="brand-name" className="block text-[11px] font-medium text-faint">
               Name <span className="text-risk-medium">*</span>
             </label>
             <input
@@ -101,7 +101,7 @@ export function BrandFormCard({
           </div>
           {LIST_FIELDS.map(({ key, label, placeholder }) => (
             <div key={key} className="space-y-1.5">
-              <label htmlFor={`brand-${key}`} className="block text-[11px] font-medium uppercase tracking-widest text-faint">
+              <label htmlFor={`brand-${key}`} className="block text-[11px] font-medium text-faint">
                 {label}
               </label>
               <textarea

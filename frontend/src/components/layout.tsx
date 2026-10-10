@@ -1,9 +1,10 @@
 import { useEffect, useState } from "react";
-import { NavLink, Link, useLocation } from "react-router-dom";
+import { Link, NavLink, useLocation } from "react-router-dom";
 import { cx } from "../lib/format";
 import { useApi } from "../lib/hooks";
 import { m1, m2, m3 } from "../lib/api";
 import { useTenant } from "../lib/tenant";
+import { GlobalSearch } from "./global-search";
 
 function Mark() {
   // A graph of connected nodes — the product's own mark.
@@ -12,51 +13,104 @@ function Mark() {
       <path
         d="M6 21.5 14 6l8 15.5"
         fill="none"
-        stroke="var(--color-action)"
-        strokeWidth="1.8"
+        stroke="var(--color-fg)"
+        strokeOpacity="0.55"
+        strokeWidth="1.7"
         strokeLinejoin="round"
       />
-      <path d="M9.6 15h8.8" stroke="var(--color-action)" strokeWidth="1.8" strokeLinecap="round" opacity="0.7" />
-      <circle cx="14" cy="6" r="2.4" fill="var(--color-risk-critical)" />
-      <circle cx="6" cy="21.5" r="2.4" fill="var(--color-action)" />
-      <circle cx="22" cy="21.5" r="2.4" fill="var(--color-action)" />
+      <path d="M9.6 15h8.8" stroke="var(--color-fg)" strokeOpacity="0.4" strokeWidth="1.7" strokeLinecap="round" />
+      <circle cx="14" cy="6" r="2.6" fill="var(--color-action)" />
+      <circle cx="6" cy="21.5" r="2.3" fill="var(--color-fg)" />
+      <circle cx="22" cy="21.5" r="2.3" fill="var(--color-fg)" />
     </svg>
   );
 }
 
-const NAV_ITEMS = [
-  { to: "/", label: "Overview", end: true },
-  { to: "/threats", label: "Threats" },
-  { to: "/scans", label: "Scans" },
-  { to: "/entities", label: "Entities" },
-  { to: "/brands", label: "Brands" },
-  { to: "/sources", label: "Sources" },
-  { to: "/analysis/history", label: "History" },
+type NavItem = { to: string; label: string; end?: boolean; icon: string };
+
+/* Grouped by the investigation journey: watch → investigate → intelligence → records. */
+const NAV_GROUPS: { label: string; items: NavItem[] }[] = [
+  {
+    label: "Monitor",
+    items: [
+      { to: "/", label: "Overview", end: true, icon: "M4 13h6V4H4zm10 7h6v-9h-6zM4 20h6v-4H4zm10-11h6V4h-6z" },
+      { to: "/graph", label: "Threat graph", icon: "M6 6h.01M18 6h.01M12 18h.01M7.5 7.2l3.6 9.3M16.5 7.2l-3.6 9.3M8 6h8" },
+    ],
+  },
+  {
+    label: "Investigate",
+    items: [
+      { to: "/investigate", label: "Investigations", icon: "M11 4a7 7 0 1 0 4.4 12.4L20 21M8 11h6M11 8v6" },
+      { to: "/threats", label: "Threats", icon: "M12 3 3 19h18L12 3zm0 6v4m0 3h.01" },
+      { to: "/entities", label: "Entities", icon: "M4 7h16M4 12h16M4 17h10" },
+    ],
+  },
+  {
+    label: "Intelligence",
+    items: [
+      { to: "/brands", label: "Brands", icon: "M12 3 4 6.5v5c0 4.6 3.4 8.4 8 9.5 4.6-1.1 8-4.9 8-9.5v-5L12 3z" },
+      { to: "/discovery", label: "Discovery", icon: "M3 12h3m12 0h3M12 3v3m0 12v3M12 8a4 4 0 1 0 0 8 4 4 0 0 0 0-8z" },
+      { to: "/sources", label: "Sources", icon: "M5 4h14v4H5zM5 10h14v4H5zM5 16h14v4H5z" },
+    ],
+  },
+  {
+    label: "Records",
+    items: [
+      { to: "/scans", label: "Scans", icon: "M4 6V4h4M20 6V4h-4M4 18v2h4M20 18v2h-4M4 12h16" },
+      { to: "/analysis/history", label: "History", icon: "M12 7v5l3 2M4 12a8 8 0 1 0 2.3-5.6M4 4v3h3" },
+    ],
+  },
 ];
 
-function NavLinks() {
+function isActive(item: NavItem, pathname: string): boolean {
+  if (item.end) return pathname === item.to;
+  if (item.to === "/investigate") return pathname.startsWith("/investigate");
+  if (item.to === "/discovery") return pathname.startsWith("/discovery");
+  if (item.to === "/scans") return pathname.startsWith("/scans") || pathname.startsWith("/scan/");
+  return pathname.startsWith(item.to);
+}
+
+function NavIcon({ d }: { d: string }) {
+  return (
+    <svg viewBox="0 0 24 24" className="size-4 shrink-0" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+      <path d={d} />
+    </svg>
+  );
+}
+
+function NavLinks({ onNavigate }: { onNavigate?: () => void }) {
   const location = useLocation();
   return (
-    <nav aria-label="Primary" className="flex items-center gap-1 lg:flex-col lg:items-stretch lg:gap-0.5">
-      {NAV_ITEMS.map((item) => {
-        const active = item.end
-          ? location.pathname === item.to
-          : location.pathname.startsWith(item.to);
-        return (
-          <NavLink
-            key={item.to}
-            to={item.to}
-            end={item.end}
-            className={cx(
-              "rounded px-3 py-1.5 text-sm font-medium transition",
-              active ? "bg-raised text-fg" : "text-muted hover:bg-raised/60 hover:text-fg",
-            )}
-            aria-current={active ? "page" : undefined}
-          >
-            {item.label}
-          </NavLink>
-        );
-      })}
+    <nav aria-label="Primary" className="space-y-5">
+      {NAV_GROUPS.map((group) => (
+        <div key={group.label}>
+          <p className="px-3 pb-1.5 text-[11px] font-medium text-faint">{group.label}</p>
+          <ul className="space-y-0.5">
+            {group.items.map((item) => {
+              const active = isActive(item, location.pathname);
+              return (
+                <li key={item.to}>
+                  <NavLink
+                    to={item.to}
+                    end={item.end}
+                    onClick={onNavigate}
+                    className={cx(
+                      "relative flex items-center gap-2.5 rounded-md px-3 py-1.5 text-[13px] font-medium transition",
+                      active
+                        ? "bg-white/[0.07] text-fg before:absolute before:inset-y-1.5 before:left-0 before:w-[3px] before:rounded-full before:bg-action"
+                        : "text-muted hover:bg-white/[0.04] hover:text-fg",
+                    )}
+                    aria-current={active ? "page" : undefined}
+                  >
+                    <NavIcon d={item.icon} />
+                    {item.label}
+                  </NavLink>
+                </li>
+              );
+            })}
+          </ul>
+        </div>
+      ))}
     </nav>
   );
 }
@@ -73,9 +127,9 @@ function ServiceStatus() {
   ];
 
   return (
-    <div className="space-y-1.5">
+    <ul className="space-y-1.5" aria-label="Service status">
       {rows.map(({ label, state }) => (
-        <p key={label} className="flex items-center justify-between gap-2 text-xs">
+        <li key={label} className="flex items-center justify-between gap-2 text-xs">
           <span className="text-muted">{label}</span>
           {state.loading ? (
             <span className="text-faint">checking…</span>
@@ -90,9 +144,9 @@ function ServiceStatus() {
               up
             </span>
           )}
-        </p>
+        </li>
       ))}
-    </div>
+    </ul>
   );
 }
 
@@ -115,7 +169,7 @@ function TenantControl() {
 
   return (
     <div className="space-y-1.5">
-      <label htmlFor="tenant-input" className="block text-[11px] font-medium uppercase tracking-widest text-faint">
+      <label htmlFor="tenant-input" className="block text-xs font-medium text-muted">
         Tenant ID
       </label>
       <input
@@ -126,23 +180,23 @@ function TenantControl() {
           if (event.key === "Enter") save();
         }}
         spellCheck={false}
-        className="w-full rounded border border-line bg-ink px-2 py-1.5 font-mono text-[11px] text-fg placeholder:text-faint focus:border-action/60 focus:outline-none"
-        aria-describedby={error ? "tenant-error" : undefined}
+        className="w-full rounded-md border border-line bg-ink/60 px-2 py-1.5 font-mono text-[11px] text-fg placeholder:text-faint focus:border-action/60 focus:outline-none"
+        aria-describedby={error ? "tenant-error" : "tenant-help"}
       />
       {error ? (
         <p id="tenant-error" className="text-[11px] text-risk-medium">
           {error}
         </p>
       ) : (
-        <p className="text-[11px] leading-relaxed text-faint">
-          Sent as <code className="font-mono">X-Tenant-ID</code> to the risk engine and evidence
-          store. Data is isolated per tenant.
+        <p id="tenant-help" className="text-[11px] leading-relaxed text-faint">
+          Sent as <code className="font-mono">X-Tenant-ID</code> to the risk engine and evidence store. Data is
+          isolated per tenant.
         </p>
       )}
       <button
         type="button"
         onClick={save}
-        className="w-full rounded border border-line bg-raised px-2 py-1 text-[11px] font-medium text-muted transition hover:border-action/60 hover:text-fg"
+        className="w-full rounded-md border border-line bg-raised px-2 py-1 text-xs font-medium text-muted transition hover:border-action/60 hover:text-fg"
       >
         Switch tenant
       </button>
@@ -152,64 +206,106 @@ function TenantControl() {
 
 export function AppShell({ children }: { children: React.ReactNode }) {
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [navOpen, setNavOpen] = useState(false);
+  const location = useLocation();
+
+  useEffect(() => {
+    setNavOpen(false);
+  }, [location.pathname]);
 
   return (
-    <div className="lg:grid lg:min-h-dvh lg:grid-cols-[232px_1fr]">
-      <aside className="sticky top-0 z-20 flex items-center gap-4 border-b border-line bg-ink/95 px-4 py-3 backdrop-blur lg:h-dvh lg:flex-col lg:items-stretch lg:border-r lg:border-b-0 lg:py-6">
-        <Link to="/" className="flex items-center gap-2.5 lg:px-2 lg:mb-6">
-          <Mark />
-          <span className="leading-tight">
-            <span className="block text-[17px] font-bold tracking-tight">TRUSTGRAPH</span>
-            <span className="hidden text-xs text-muted lg:block">Threat intelligence console</span>
-          </span>
-        </Link>
-        <div className="ml-auto overflow-x-auto lg:ml-0">
-          <NavLinks />
-        </div>
-        <div className="mt-auto hidden w-full space-y-4 rounded-md border border-line-soft p-3 lg:block">
-          <Link
-            to="/analysis/new"
-            className="block rounded border border-action/60 bg-action/15 px-3 py-2 text-center text-xs font-semibold text-action transition hover:bg-action/25"
-          >
-            Run analysis
+    <div className="lg:grid lg:min-h-dvh lg:grid-cols-[236px_1fr]">
+      <a
+        href="#main"
+        className="sr-only focus:not-sr-only focus:fixed focus:left-3 focus:top-3 focus:z-50 focus:rounded-md focus:bg-action focus:px-3 focus:py-2 focus:text-on-action"
+      >
+        Skip to content
+      </a>
+
+      {/* Sidebar (desktop) / drawer (mobile) */}
+      <aside
+        id="primary-nav"
+        className={cx(
+          "glass-strong fixed inset-y-0 left-0 z-40 w-[236px] border-r border-line-soft px-3 py-5 transition-transform lg:sticky lg:top-0 lg:h-dvh lg:translate-x-0",
+          navOpen ? "translate-x-0" : "-translate-x-full",
+        )}
+      >
+        <div className="flex h-full flex-col">
+          <Link to="/" className="mb-7 flex items-center gap-2.5 px-2">
+            <Mark />
+            <span className="leading-tight">
+              <span className="font-display block text-[17px] font-bold">TRUSTGRAPH</span>
+              <span className="block text-[11px] text-faint">Security operations</span>
+            </span>
           </Link>
-          <TenantControl />
-          <div className="border-t border-line-soft pt-3">
+          <div className="min-h-0 flex-1 overflow-y-auto pr-1">
+            <NavLinks onNavigate={() => setNavOpen(false)} />
+          </div>
+          <div className="mt-4 rounded-lg border border-line-soft bg-white/[0.02] p-3">
             <ServiceStatus />
           </div>
         </div>
+      </aside>
+      {navOpen ? (
         <button
           type="button"
-          onClick={() => setSettingsOpen((open) => !open)}
-          aria-expanded={settingsOpen}
-          aria-controls="mobile-panel"
-          className="rounded border border-line bg-raised px-2.5 py-1.5 text-[11px] font-medium text-muted transition hover:border-action/60 hover:text-fg lg:hidden"
-        >
-          {settingsOpen ? "Close settings" : "Settings"}
-        </button>
-      </aside>
-      {settingsOpen ? (
-        <div
-          id="mobile-panel"
-          className="sticky top-[3.25rem] z-10 border-b border-line bg-ink/95 px-4 py-3 backdrop-blur lg:hidden"
-        >
-          <div className="mx-auto grid max-w-3xl gap-4 sm:grid-cols-2">
-            <TenantControl />
-            <ServiceStatus />
-          </div>
-        </div>
+          aria-label="Close navigation"
+          className="fixed inset-0 z-30 bg-black/50 lg:hidden"
+          onClick={() => setNavOpen(false)}
+        />
       ) : null}
-      <main className="min-w-0 px-4 py-6 sm:px-6 lg:px-10 lg:py-9">
-        <div className="mb-4 flex items-center justify-end lg:hidden">
-          <Link
-            to="/analysis/new"
-            className="rounded border border-action/60 bg-action/15 px-3 py-1.5 text-xs font-semibold text-action"
-          >
-            Run analysis
-          </Link>
-        </div>
-        {children}
-      </main>
+
+      <div className="min-w-0">
+        <header className="glass-strong sticky top-0 z-20 border-b border-line-soft">
+          <div className="flex items-center gap-2 px-4 py-2.5 sm:gap-3 sm:px-6 lg:px-8">
+            <button
+              type="button"
+              onClick={() => setNavOpen(true)}
+              aria-controls="primary-nav"
+              aria-expanded={navOpen}
+              className="rounded-md border border-line p-1.5 text-muted hover:text-fg lg:hidden"
+            >
+              <span className="sr-only">Open navigation</span>
+              <svg viewBox="0 0 24 24" className="size-4" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden>
+                <path d="M4 7h16M4 12h16M4 17h16" />
+              </svg>
+            </button>
+            <GlobalSearch />
+            <div className="ml-auto flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => setSettingsOpen((open) => !open)}
+                aria-expanded={settingsOpen}
+                aria-controls="settings-panel"
+                className="rounded-md border border-line bg-raised/70 px-2.5 py-1.5 text-xs font-medium text-muted transition hover:border-action/60 hover:text-fg"
+              >
+                {settingsOpen ? "Close settings" : "Settings"}
+              </button>
+              <Link
+                to="/analysis/new"
+                className="whitespace-nowrap rounded-md bg-action px-3 py-1.5 text-[13px] font-semibold text-on-action transition hover:bg-action-strong"
+              >
+                <span className="sm:hidden">Analyze</span>
+                <span className="hidden sm:inline">New threat analysis</span>
+              </Link>
+            </div>
+          </div>
+          {settingsOpen ? (
+            <div id="settings-panel" className="border-t border-line-soft px-4 py-4 sm:px-6 lg:px-8">
+              <div className="grid max-w-3xl gap-6 sm:grid-cols-2">
+                <TenantControl />
+                <div>
+                  <p className="mb-2 text-xs font-medium text-muted">Connected modules</p>
+                  <ServiceStatus />
+                </div>
+              </div>
+            </div>
+          ) : null}
+        </header>
+        <main id="main" className="min-w-0 px-4 py-6 sm:px-6 lg:px-8 lg:py-8">
+          {children}
+        </main>
+      </div>
     </div>
   );
 }

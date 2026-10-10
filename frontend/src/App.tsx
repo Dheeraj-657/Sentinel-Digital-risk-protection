@@ -18,6 +18,10 @@ import { Scans } from "./pages/Scans";
 import { ScanDetail } from "./pages/ScanDetail";
 import { Sources } from "./pages/Sources";
 import { NotFound } from "./pages/NotFound";
+import { Investigation } from "./pages/Investigation";
+import { Investigations } from "./pages/Investigations";
+import { ThreatGraph } from "./pages/ThreatGraph";
+import { DiscoveryCenter } from "./pages/DiscoveryCenter";
 
 export default function App() {
   return (
@@ -36,7 +40,11 @@ export default function App() {
               <Route path="/analysis/new" element={<NewAnalysis />} />
               <Route path="/analysis/history" element={<AnalysisHistory />} />
               <Route path="/analysis/:jobId" element={<AnalysisJob />} />
+              <Route path="/discovery" element={<DiscoveryCenter />} />
               <Route path="/discovery/:jobId" element={<DiscoveryJob />} />
+              <Route path="/investigate" element={<Investigations />} />
+              <Route path="/investigate/:entityId" element={<Investigation />} />
+              <Route path="/graph" element={<ThreatGraph />} />
               <Route path="/scan/new" element={<ScanNew />} />
               <Route path="/scans" element={<Scans />} />
               <Route path="/scans/:scanId" element={<ScanDetail />} />

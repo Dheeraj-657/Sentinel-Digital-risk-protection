@@ -87,6 +87,12 @@ export function EntityDetail() {
             <Link to={`/analysis/new?entity=${encodeURIComponent(entityId)}`}>
               <Button>Run analysis</Button>
             </Link>
+            <Link
+              to={`/investigate/${encodeURIComponent(entityId)}`}
+              className="rounded-md border border-line bg-raised/70 px-3 py-1.5 text-[13px] font-medium text-fg transition hover:border-action/60"
+            >
+              Open investigation
+            </Link>
           </div>
         }
       />
@@ -370,7 +376,7 @@ function EditEntityCard({
       <form onSubmit={submit} className="space-y-4 px-4 py-4 sm:px-5" noValidate>
         <div className="grid gap-4 sm:grid-cols-2">
           <div className="space-y-1.5">
-            <label htmlFor="edit-entity-name" className="block text-[11px] font-medium uppercase tracking-widest text-faint">
+            <label htmlFor="edit-entity-name" className="block text-[11px] font-medium text-faint">
               Display name <span className="text-risk-medium">*</span>
             </label>
             <input
@@ -382,7 +388,7 @@ function EditEntityCard({
             />
           </div>
           <div className="space-y-1.5">
-            <label htmlFor="edit-entity-identifiers" className="block text-[11px] font-medium uppercase tracking-widest text-faint">
+            <label htmlFor="edit-entity-identifiers" className="block text-[11px] font-medium text-faint">
               Identifiers
             </label>
             <textarea
@@ -486,7 +492,7 @@ function AttachEvidenceForm({
     <form onSubmit={submit} className="space-y-4 border-b border-line-soft px-4 py-4 sm:px-5" noValidate>
       <div className="grid gap-4 sm:grid-cols-2">
         <div className="space-y-1.5">
-          <label htmlFor="evidence-source" className="block text-[11px] font-medium uppercase tracking-widest text-faint">
+          <label htmlFor="evidence-source" className="block text-[11px] font-medium text-faint">
             Source <span className="text-risk-medium">*</span>
           </label>
           <select
@@ -512,7 +518,7 @@ function AttachEvidenceForm({
           />
         </div>
         <div className="space-y-1.5">
-          <label htmlFor="evidence-type" className="block text-[11px] font-medium uppercase tracking-widest text-faint">
+          <label htmlFor="evidence-type" className="block text-[11px] font-medium text-faint">
             Type <span className="text-risk-medium">*</span>
           </label>
           <select
@@ -529,7 +535,7 @@ function AttachEvidenceForm({
           </select>
         </div>
         <div className="space-y-1.5 sm:col-span-2">
-          <label htmlFor="evidence-text" className="block text-[11px] font-medium uppercase tracking-widest text-faint">
+          <label htmlFor="evidence-text" className="block text-[11px] font-medium text-faint">
             Text
           </label>
           <textarea
@@ -542,7 +548,7 @@ function AttachEvidenceForm({
           />
         </div>
         <div className="space-y-1.5">
-          <label htmlFor="evidence-url" className="block text-[11px] font-medium uppercase tracking-widest text-faint">
+          <label htmlFor="evidence-url" className="block text-[11px] font-medium text-faint">
             URL
           </label>
           <input
@@ -555,7 +561,7 @@ function AttachEvidenceForm({
           />
         </div>
         <div className="space-y-1.5">
-          <label htmlFor="evidence-hash" className="block text-[11px] font-medium uppercase tracking-widest text-faint">
+          <label htmlFor="evidence-hash" className="block text-[11px] font-medium text-faint">
             Image hash
           </label>
           <input

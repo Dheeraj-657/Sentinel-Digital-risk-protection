@@ -479,3 +479,47 @@ export interface RelatedThreatsResponse {
   /** Non-fatal notes — never silent skips. */
   warnings: string[];
 }
+
+// ---------- Module 4 (AI Security Analyst, backend/app/module4) ----------
+
+export type AnalystIntent = "compare" | "relations" | "evidence" | "next_steps" | "why" | "summary";
+
+export interface AnalystTurn {
+  role: "user" | "assistant";
+  content: string;
+}
+
+export interface AnalystRequest {
+  question: string;
+  threat_id?: string | null;
+  entity_id?: string | null;
+  compare_threat_id?: string | null;
+  history?: AnalystTurn[];
+}
+
+export interface AnalystResponse {
+  answer: string;
+  intent: AnalystIntent;
+  /** GROQ = grounded model answer; TEMPLATE = deterministic restatement of stored records. */
+  source: "GROQ" | "TEMPLATE";
+  model: string | null;
+  citations: { evidence_ids: string[]; threat_ids: string[]; entity_ids: string[] };
+  context: {
+    threat_ids: string[];
+    entity_ids: string[];
+    evidence_count: number;
+    related_count: number;
+    brand_names: string[];
+    missing: string[];
+  };
+  limitations: string[];
+  notes: string[];
+  generated_at: string;
+}
+
+export interface AnalystStatus {
+  llm_provider: string;
+  llm_configured: boolean;
+  model: string;
+  grounding: string;
+}

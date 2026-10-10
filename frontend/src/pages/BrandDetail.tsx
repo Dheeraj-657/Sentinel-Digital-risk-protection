@@ -213,7 +213,7 @@ export function BrandDetail() {
               {derivedUuid}
             </KeyValue>
             <div>
-              <dt className="text-[11px] font-medium uppercase tracking-widest text-faint">Derivation</dt>
+              <dt className="text-[11px] font-medium text-faint">Derivation</dt>
               <dd className="mt-1 space-y-1 text-xs leading-relaxed text-muted">
                 <p>
                   <code className="font-mono">uuid5(SENTINEL_BRAND_NAMESPACE, &quot;{data.id}&quot;)</code>
@@ -267,7 +267,7 @@ export function BrandDetail() {
           <div className="overflow-x-auto">
             <table className="w-full text-left text-sm">
               <thead>
-                <tr className="border-b border-line-soft text-[11px] uppercase tracking-widest text-faint">
+                <tr className="border-b border-line-soft text-[11px] text-faint">
                   <th scope="col" className="px-4 py-2.5 font-medium sm:px-5">
                     Target
                   </th>
@@ -374,7 +374,7 @@ export function BrandDetail() {
           <div className="overflow-x-auto">
             <table className="w-full text-left text-sm">
               <thead>
-                <tr className="border-b border-line-soft text-[11px] uppercase tracking-widest text-faint">
+                <tr className="border-b border-line-soft text-[11px] text-faint">
                   <th scope="col" className="px-4 py-2.5 font-medium sm:px-5">
                     Job
                   </th>

@@ -167,6 +167,43 @@ verdict, and history lives in the analysis jobs/results.
 
 ---
 
+## Module 4 — AI Security Analyst (served by Module 2, :8000)
+
+Isolated package `backend/app/module4/`; requires `X-Tenant-ID` like every Module 2 route. Read-only: it never scores, writes threats or performs actions.
+
+### `POST /api/v1/investigation/analyst`
+
+```json
+{
+  "question": "Why was this entity classified as medium risk?",
+  "threat_id": "7a250d38-…",          // threat_id and/or entity_id (entity → its highest verdict)
+  "entity_id": "161a6131-…",
+  "compare_threat_id": null,           // optional second verdict
+  "history": [{"role": "user", "content": "…"}]   // ≤ 8 turns, last 6 forwarded
+}
+```
+
+Response:
+
+```json
+{
+  "answer": "… rated MEDIUM risk … [threat:7a250d38-…] … [ev:01ca6c91-…]",
+  "intent": "why",                      // why | evidence | relations | next_steps | compare | summary
+  "source": "GROQ",                     // or TEMPLATE (no key, provider failure, or grounding rejection)
+  "model": "openai/gpt-oss-120b",
+  "citations": {"evidence_ids": [], "threat_ids": [], "entity_ids": []},
+  "context": {"threat_ids": [], "entity_ids": [], "evidence_count": 4, "related_count": 2,
+              "brand_names": ["NovaPay"], "missing": []},
+  "limitations": [], "notes": [], "generated_at": "…"
+}
+```
+
+Errors: `400 TENANT_REQUIRED`, `404 NOT_FOUND` (unknown or cross-tenant threat/entity), `422 VALIDATION_ERROR` (no subject, or threat not belonging to entity). Grounding rules: see [MODULE4.md](MODULE4.md#2-backend-change-isolated-additive).
+
+### `GET /api/v1/investigation/analyst/status`
+
+`{"llm_provider": "groq", "llm_configured": false, "model": "openai/gpt-oss-120b", "grounding": "…"}` (never the key).
+
 ## Module 3 — Entity & Evidence (:8001)
 
 ### Entities

@@ -67,6 +67,10 @@ export function createApiMock() {
       listSources: asyncFn(),
       createSource: asyncFn(),
     },
+    m4: {
+      analystStatus: asyncFn(),
+      askAnalyst: asyncFn(),
+    },
   };
 }
 

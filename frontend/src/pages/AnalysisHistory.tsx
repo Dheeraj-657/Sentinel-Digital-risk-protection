@@ -129,7 +129,7 @@ export function AnalysisHistory() {
             <div className="overflow-x-auto">
               <table className="w-full text-left text-sm">
                 <thead>
-                  <tr className="border-b border-line-soft text-[11px] uppercase tracking-widest text-faint">
+                  <tr className="border-b border-line-soft text-[11px] text-faint">
                     <th scope="col" className="px-4 py-2.5 font-medium sm:px-5">
                       Job
                     </th>

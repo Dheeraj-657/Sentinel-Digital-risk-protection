@@ -25,7 +25,7 @@ a unified analyst console:
 | **Module 1 — Sentinel DRP** (`module1/`) | 3000 | Next.js 16, Prisma, SQLite | Protected-brand registry (**Brand DNA**: official domains, handles, app developers, package prefixes, keywords) + a standalone scan experience with Groq AI assessments |
 | **Module 2 — Risk Engine** (`backend/`) | 8000 | Python 3.11, FastAPI, SQLAlchemy, Alembic | Canonical scoring service: async analysis jobs, weighted factor scoring, confidence, classification, threat register, **automatic threat discovery** (CT logs + optional web search) |
 | **Module 3 — Entity & Evidence** (`module3/`) | 8001 | Python 3.11, FastAPI, SQLAlchemy, Alembic | Entity register, evidence items with source provenance, tenant-scoped |
-| **Frontend console** (`frontend/`) | 5173 | Vite, React 19, TypeScript (strict), Tailwind v4 | Unified analyst console across all three modules |
+| **Module 4 — Dashboard & AI Security Analyst** (`frontend/` + `backend/app/module4/`) | 5173 (+ API on 8000) | Vite, React 19, TypeScript (strict), Tailwind v4; FastAPI router | Unified console: overview, investigation workspace, threat graph, discovery center, global search, and a grounded AI Security Analyst ([docs/MODULE4.md](docs/MODULE4.md)) |
 
 ---
 
@@ -142,6 +142,9 @@ npm install
 > real cross-service integration. `backend/.env` is gitignored and already exists on
 > the development machine.
 
+> **Windows shortcut:** after the one-time setup, `.\start-trustgraph.ps1` from the repo root
+> opens all four services in separate windows.
+
 ### 1. Start Module 1 — Sentinel DRP (port 3000)
 
 ```powershell
@@ -219,6 +222,14 @@ All optional beyond the defaults shown; **none of the API keys below are committ
 | `TRUSTGRAPH_M3_DATABASE_URL` | `sqlite:///./module3.db` | SQLite locally; PostgreSQL URL in production. |
 | `TRUSTGRAPH_M3_LOG_LEVEL` | `INFO` | Logging. |
 
+**Module 4 analyst** (`backend/.env`, same names as Module 1)
+
+| Variable | Default | Purpose |
+|---|---|---|
+| `GROQ_API_KEY` | — | Enables Groq answers for the AI Security Analyst. Server-only. Without it the analyst returns a deterministic, labelled summary of the stored records. |
+| `GROQ_MODEL` | `openai/gpt-oss-120b` | Groq chat model. |
+| `GROQ_BASE_URL` | `https://api.groq.com/openai/v1` | OpenAI-compatible gateway/proxy. |
+
 **Frontend** — no environment variables; the dev proxy table lives in
 `frontend/vite.config.ts` (brands/health → :3000, entities/sources/healthz → :8001,
 everything else under `/api/v1` + `/readyz` → :8000).
@@ -292,6 +303,16 @@ Everything below was executed end-to-end through the running UI before submissio
 11. **Registry pages** — `/sources` (source registry + creation form) and
     `/analysis/history` (job history with status filter and links to jobs/threats).
 
+## Module 4 walkthrough (unified console)
+
+1. **Overview** (`/`): threat posture by level (critical first), classification mix, brands/entities/threats/open/confirmed/scans, latest analysis jobs with 14-day activity, discovery runs and data-source status. Every number opens the filtered record list.
+2. **Search** (`/` key): find an entity by name, domain, handle or package; Enter opens its investigation.
+3. **Investigation workspace** (`/investigate/{entityId}`): verdict per brand, brand reference, evidence (expandable, provenance), risk breakdown, exact-match connections, history. Ask the **AI Security Analyst** "Why was this entity classified as medium risk?"; click an `ev …` citation to jump to that evidence.
+4. **Threat graph** (`/graph`): zoom, pan, fit, filter; select a node to open its investigation or an edge to see the shared value and evidence; **Table** view as the accessible alternative. Linked clusters are labelled leads; campaign detection is not implemented in the backend.
+5. **Discovery** (`/discovery`): start discovery for a brand, see per-provider status, and filter entities by collection source and analysis status.
+
+Full report, file list, workflow results and data-honesty table: [docs/MODULE4.md](docs/MODULE4.md).
+
 ## Feature matrix
 
 Categories follow the five honest buckets defined in
@@ -345,8 +366,13 @@ deliberately not implemented.
 - Deterministic risk engine: seven weighted factor families, 0–100 score, four risk
   levels, confidence scoring, classification, engine version stamping.
 - Brand DNA registry with derived-UUID bridge from Module 1 cuids.
-- Full test suites: frontend 81/81, Module 2 148/148, Module 3 92/92, Module 1
-  typecheck + brand-input checks + engine self-check.
+- Module 4: unified overview, investigation workspace, AI Security Analyst
+  (`POST /api/v1/investigation/analyst`, grounded with citation/number/level/
+  action checks and a deterministic fallback), threat graph with table
+  alternative and linked clusters, discovery center, global search.
+- Full test suites (2026-10-10): frontend 103/103, Module 2 169/169 (incl. 21
+  analyst tests), Module 3 88 passed + 1 skipped, Module 1 typecheck +
+  brand-input checks + engine self-check.
 
 **Implemented — requires credentials** (none committed; each degrades honestly)
 - `web_search` discovery provider (Brave Search API shape): set
@@ -368,8 +394,8 @@ deliberately not implemented.
 **Planned / out of scope for this deadline**
 - Scheduled/recurring discovery (jobs are on-demand), notification/webhook
   integrations, multi-tenant auth/UI, PostgreSQL deployment, LLM explanations
-  inside the risk engine, graph visualization (related-threat links are
-  deliberately evidence-backed list items, not a fabricated graph).
+  inside the risk engine's scoring, backend campaign detection (the graph shows
+  exact-match clusters labelled as leads), report export.
 
 ## Risk scoring, briefly
 
@@ -398,11 +424,11 @@ Run from each module's directory; full commands and captured output are in
 
 | Suite | Command | Result |
 |---|---|---|
-| Frontend unit tests | `npm run test` | **81/81 passed** (incl. discovery-job and related-threats suites) |
+| Frontend unit tests | `npm run test` | **103/103 passed** (incl. 20 Module 4 tests) |
 | Frontend types | `npm run typecheck` | clean (TS 5.9 strict) |
 | Frontend build | `npm run build` | ✓ (typecheck + production bundle) |
-| Module 2 risk engine | `python -m pytest` | **148/148 passed** (incl. 20 discovery + 9 related-threat honesty tests) |
-| Module 3 evidence store | `python -m pytest` | **92/92 passed** |
+| Module 2 risk engine + Module 4 analyst | `python -m pytest` | **169/169 passed** (incl. 21 analyst grounding/isolation tests) |
+| Module 3 evidence store | `python -m pytest` | **88 passed, 1 skipped** |
 | Module 1 types | `npm run typecheck` | clean |
 | Module 1 brand API checks | `npm run test:brands` | all checks passed |
 | Module 1 engine self-check | `npm run test:engine` | all checks passed |
@@ -427,6 +453,7 @@ Run from each module's directory; full commands and captured output are in
 
 ## Documentation index
 
+- [docs/MODULE4.md](docs/MODULE4.md) — Module 4 report: features, backend boundary, tests, workflow verification, real vs mock.
 - [docs/API.md](docs/API.md) — every endpoint (Modules 1/2/3), request/response shapes,
   error semantics, and a field-by-field guide to the risk-scoring output.
 - [docs/TESTING.md](docs/TESTING.md) — exact test/build commands and captured results.

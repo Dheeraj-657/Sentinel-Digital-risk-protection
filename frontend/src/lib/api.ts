@@ -1,5 +1,8 @@
 import type {
   AnalysisJob,
+  AnalystRequest,
+  AnalystResponse,
+  AnalystStatus,
   DiscoveryJob,
   DiscoveryJobListResponse,
   DiscoveryQueryParams,
@@ -334,4 +337,19 @@ export const m1 = {
     apiFetch<void>(`/api/scans/${id}`, { method: "DELETE", signal }),
 
   getStats: (signal?: AbortSignal) => apiFetch<M1Stats>("/api/stats", { signal }),
+};
+
+// ---------- Module 4 (AI Security Analyst — backend/app/module4, served by :8000) ----------
+
+export const m4 = {
+  analystStatus: (signal?: AbortSignal) =>
+    apiFetch<AnalystStatus>("/api/v1/investigation/analyst/status", { signal }),
+
+  askAnalyst: (payload: AnalystRequest, tenant: string, signal?: AbortSignal) =>
+    apiFetch<AnalystResponse>("/api/v1/investigation/analyst", {
+      method: "POST",
+      body: payload,
+      tenant,
+      signal,
+    }),
 };

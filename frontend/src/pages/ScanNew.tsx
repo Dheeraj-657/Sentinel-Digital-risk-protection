@@ -79,7 +79,7 @@ export function ScanNew() {
           />
           <div className="grid gap-5 px-4 py-4 sm:px-5 md:grid-cols-2">
             <div className="space-y-1.5">
-              <label htmlFor="scan-type" className="block text-[11px] font-medium uppercase tracking-widest text-faint">
+              <label htmlFor="scan-type" className="block text-[11px] font-medium text-faint">
                 Entity type <span className="text-risk-medium">*</span>
               </label>
               <select
@@ -97,7 +97,7 @@ export function ScanNew() {
             </div>
 
             <div className="space-y-1.5">
-              <label htmlFor="scan-input" className="block text-[11px] font-medium uppercase tracking-widest text-faint">
+              <label htmlFor="scan-input" className="block text-[11px] font-medium text-faint">
                 Input <span className="text-risk-medium">*</span>
               </label>
               <input
@@ -117,7 +117,7 @@ export function ScanNew() {
             </div>
 
             <div className="space-y-1.5">
-              <label htmlFor="scan-brand" className="block text-[11px] font-medium uppercase tracking-widest text-faint">
+              <label htmlFor="scan-brand" className="block text-[11px] font-medium text-faint">
                 Protected brand
               </label>
               {brands.loading ? (
@@ -148,7 +148,7 @@ export function ScanNew() {
             </div>
 
             <div className="space-y-1.5">
-              <label htmlFor="scan-developer" className="block text-[11px] font-medium uppercase tracking-widest text-faint">
+              <label htmlFor="scan-developer" className="block text-[11px] font-medium text-faint">
                 Claimed developer
               </label>
               <input

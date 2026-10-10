@@ -20,6 +20,7 @@ from sqlalchemy.orm import sessionmaker
 from app.api.v1 import analysis as analysis_router
 from app.api.v1 import discovery as discovery_router
 from app.api.v1 import threats as threats_router
+from app.module4 import router as module4_router  # Module 4: AI Security Analyst (additive)
 from app.core.config import Settings
 from app.core.errors import AppError, ErrorCode
 from app.core.logging import configure_logging, get_correlation_id, get_logger, new_correlation_id, set_correlation_id, set_request_id
@@ -339,6 +340,7 @@ def create_app(settings: Settings | None = None, *, engine=None) -> FastAPI:
     app.include_router(analysis_router.router, prefix=settings.api_v1_prefix)
     app.include_router(discovery_router.router, prefix=settings.api_v1_prefix)
     app.include_router(threats_router.router, prefix=settings.api_v1_prefix)
+    app.include_router(module4_router.router, prefix=settings.api_v1_prefix)
 
     @app.get("/healthz", response_model=HealthResponse)
     def healthz() -> HealthResponse:

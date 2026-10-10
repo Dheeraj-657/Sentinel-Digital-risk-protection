@@ -143,7 +143,7 @@ export function Entities() {
           <div className="overflow-x-auto">
             <table className="w-full text-left text-sm">
               <thead>
-                <tr className="border-b border-line-soft text-[11px] uppercase tracking-widest text-faint">
+                <tr className="border-b border-line-soft text-[11px] text-faint">
                   <th scope="col" className="px-4 py-2.5 font-medium sm:px-5">
                     Entity
                   </th>
@@ -256,7 +256,7 @@ export function RegisterEntityCard({ onCreated }: { onCreated: () => void }) {
       <form onSubmit={submit} className="space-y-4 px-4 py-4 sm:px-5" noValidate>
         <div className="grid gap-4 sm:grid-cols-2">
           <div className="space-y-1.5">
-            <label htmlFor="entity-type" className="block text-[11px] font-medium uppercase tracking-widest text-faint">
+            <label htmlFor="entity-type" className="block text-[11px] font-medium text-faint">
               Type
             </label>
             <select
@@ -273,7 +273,7 @@ export function RegisterEntityCard({ onCreated }: { onCreated: () => void }) {
             </select>
           </div>
           <div className="space-y-1.5">
-            <label htmlFor="entity-name" className="block text-[11px] font-medium uppercase tracking-widest text-faint">
+            <label htmlFor="entity-name" className="block text-[11px] font-medium text-faint">
               Display name <span className="text-risk-medium">*</span>
             </label>
             <input
@@ -286,7 +286,7 @@ export function RegisterEntityCard({ onCreated }: { onCreated: () => void }) {
             />
           </div>
           <div className="space-y-1.5">
-            <label htmlFor="entity-domain" className="block text-[11px] font-medium uppercase tracking-widest text-faint">
+            <label htmlFor="entity-domain" className="block text-[11px] font-medium text-faint">
               Domain
             </label>
             <input
@@ -299,7 +299,7 @@ export function RegisterEntityCard({ onCreated }: { onCreated: () => void }) {
             />
           </div>
           <div className="space-y-1.5">
-            <label htmlFor="entity-handle" className="block text-[11px] font-medium uppercase tracking-widest text-faint">
+            <label htmlFor="entity-handle" className="block text-[11px] font-medium text-faint">
               Handle
             </label>
             <input

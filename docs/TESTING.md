@@ -9,13 +9,21 @@ PowerShell, run from the module's directory.
 | # | Suite | Command | Result |
 |---|---|---|---|
 | 1 | Frontend types | `npm run typecheck` | **clean** (TypeScript 5.9, strict) |
-| 2 | Frontend unit tests | `npm run test` | **83/83 passed** (10 test files) |
+| 2 | Frontend unit tests | `npm run test` | **103/103 passed** (13 test files; 83 pre-existing + 20 Module 4) |
 | 3 | Frontend production build | `npm run build` | **✓ built in ~1.8 s** |
-| 4 | Module 2 risk engine | `python -m pytest` | **148/148 passed** (0 failures, 0 errors, 0 skipped) |
-| 5 | Module 3 evidence store | `python -m pytest` | **92/92 passed** (0 failures, 0 errors, 0 skipped) |
+| 4 | Module 2 risk engine + Module 4 analyst | `python -m pytest` | **169/169 passed** (148 pre-existing + 21 in `tests/test_module4_analyst.py`) |
+| 5 | Module 3 evidence store | `python -m pytest` | **88 passed, 1 skipped** (re-run 2026-10-10 before and after Module 4; identical, Module 3 unchanged) |
 | 6 | Module 1 types | `npm run typecheck` | **clean** |
 | 7 | Module 1 brand API checks | `npm run test:brands` | **all checks passed** |
 | 8 | Module 1 engine self-check | `npm run test:engine` | **all engine checks passed** |
+
+## Module 4 verification (2026-10-10)
+
+Baseline before any Module 4 change: frontend 83/83, Module 2 148/148, Module 3 88 passed + 1 skipped, Module 1 checks passing. After Module 4: the numbers in the summary above; no pre-existing test was changed (only the shared API mock gained an `m4` entry).
+
+- `backend/tests/test_module4_analyst.py` (21): template answers restate stored verdicts with valid citations; relation answers come from `RelatedThreatService`; next steps never claim execution; compare; entity-without-verdict disclosure; cross-tenant 404; tenant header required; subject validation; status never exposes the key; grounded model answers accepted; untrusted evidence sent as data under explicit rules; invented numbers, wrong level, wrong score, claimed actions and uncited answers rejected and replaced; unknown citations stripped; provider failure falls back; history bounded.
+- `frontend/src/pages/module4.test.tsx` (13), `lib/graph.test.ts` (5), `lib/analyst.test.ts` (2): workspace shows API values unchanged; connections; analyst request context, citation → evidence focus, AI vs template labelling, disclosure, error + retry; no-verdict state; investigations ranking; graph draws only backend relations, labels clusters, reports failed lookups, table alternative; discovery start uses the bridged brand UUID; source filter; global search keyboard navigation.
+- Browser (headless Chromium against the four running services): all console pages at 1366×768 and 390×844 without horizontal page scroll or console errors; analyst Q&A, citation focus and compare; brand → threat → workspace → connections → analyst journey; analyst Groq path through a local OpenAI-compatible stand-in (api.groq.com unreachable from the build sandbox).
 
 ## Commands and captured output
 

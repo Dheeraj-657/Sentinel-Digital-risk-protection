@@ -111,7 +111,7 @@ export function NewAnalysis() {
           />
           <div className="grid gap-5 px-4 py-4 sm:px-5 md:grid-cols-2">
             <div className="space-y-1.5">
-              <label htmlFor="analysis-brand" className="block text-[11px] font-medium uppercase tracking-widest text-faint">
+              <label htmlFor="analysis-brand" className="block text-[11px] font-medium text-faint">
                 Protected brand <span className="text-risk-medium">*</span>
               </label>
               {brands.loading ? (
@@ -148,7 +148,7 @@ export function NewAnalysis() {
             </div>
 
             <div className="space-y-1.5">
-              <label htmlFor="analysis-entity" className="block text-[11px] font-medium uppercase tracking-widest text-faint">
+              <label htmlFor="analysis-entity" className="block text-[11px] font-medium text-faint">
                 Discovered entity <span className="text-risk-medium">*</span>
               </label>
               {entities.loading ? (

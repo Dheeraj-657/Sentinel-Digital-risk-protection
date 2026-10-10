@@ -142,7 +142,7 @@ function CreateSourceCard({ onCreated }: { onCreated: () => void }) {
   return (
     <form onSubmit={submit} className="grid gap-4 px-4 py-4 sm:grid-cols-2 sm:px-5" noValidate>
       <div className="space-y-1.5">
-        <label htmlFor="source-name" className="block text-[11px] font-medium uppercase tracking-widest text-faint">
+        <label htmlFor="source-name" className="block text-[11px] font-medium text-faint">
           Name <span className="text-risk-medium">*</span>
         </label>
         <input
@@ -155,7 +155,7 @@ function CreateSourceCard({ onCreated }: { onCreated: () => void }) {
         />
       </div>
       <div className="space-y-1.5">
-        <label htmlFor="source-kind" className="block text-[11px] font-medium uppercase tracking-widest text-faint">
+        <label htmlFor="source-kind" className="block text-[11px] font-medium text-faint">
           Kind <span className="text-risk-medium">*</span>
         </label>
         <input

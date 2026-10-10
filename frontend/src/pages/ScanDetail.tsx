@@ -309,7 +309,7 @@ function ScanReportView({
                   <Badge tone={SEVERITY_TONE[signal.severity]}>
                     {M1_SEVERITY_LABEL[signal.severity] ?? signal.severity}
                   </Badge>
-                  <span className="text-[11px] uppercase tracking-widest text-faint">
+                  <span className="text-[11px] text-faint">
                     {M1_CATEGORY_LABEL[signal.category] ?? signal.category}
                   </span>
                   <span className="min-w-0 flex-1 truncate text-sm font-medium text-fg">
@@ -393,7 +393,7 @@ function ScanReportView({
             <p className="text-xs leading-relaxed text-fg">{report.aiAssessment.summary}</p>
             {report.aiAssessment.keyFindings.length > 0 ? (
               <div>
-                <p className="text-[11px] font-medium uppercase tracking-widest text-faint">Key findings</p>
+                <p className="text-[11px] font-medium text-faint">Key findings</p>
                 <ul className="mt-1 space-y-1">
                   {report.aiAssessment.keyFindings.map((finding, index) => (
                     <li key={index} className="text-xs leading-relaxed text-muted">
@@ -405,7 +405,7 @@ function ScanReportView({
             ) : null}
             {report.aiAssessment.caveats.length > 0 ? (
               <div>
-                <p className="text-[11px] font-medium uppercase tracking-widest text-faint">Caveats</p>
+                <p className="text-[11px] font-medium text-faint">Caveats</p>
                 <ul className="mt-1 space-y-1">
                   {report.aiAssessment.caveats.map((caveat, index) => (
                     <li key={index} className="text-xs leading-relaxed text-muted">
