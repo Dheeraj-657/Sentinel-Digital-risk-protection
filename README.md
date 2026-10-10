@@ -11,13 +11,19 @@ entity, and get back a **0–100 risk score**, a **risk level**, a **classificat
 families** — with every evidence item traceable to its source (provenance), and a clear
 distinction between what was **observed** and what the engine **inferred**.
 
+Threat candidates can also arrive **automatically**: from a protected brand's DNA,
+TRUSTGRAPH runs bounded queries against public Certificate Transparency logs and an
+optional web-search API, normalizes and deduplicates the observations, persists each
+retained candidate as traceable evidence, and chains it into the same canonical engine —
+with honest per-provider reporting whenever a source is down or unconfigured.
+
 TRUSTGRAPH is a four-service integration of three independently developed modules plus
 a unified analyst console:
 
 | Service | Port | Stack | Role |
 |---|---|---|---|
 | **Module 1 — Sentinel DRP** (`module1/`) | 3000 | Next.js 16, Prisma, SQLite | Protected-brand registry (**Brand DNA**: official domains, handles, app developers, package prefixes, keywords) + a standalone scan experience with Groq AI assessments |
-| **Module 2 — Risk Engine** (`backend/`) | 8000 | Python 3.11, FastAPI, SQLAlchemy, Alembic | Canonical scoring service: async analysis jobs, weighted factor scoring, confidence, classification, threat register |
+| **Module 2 — Risk Engine** (`backend/`) | 8000 | Python 3.11, FastAPI, SQLAlchemy, Alembic | Canonical scoring service: async analysis jobs, weighted factor scoring, confidence, classification, threat register, **automatic threat discovery** (CT logs + optional web search) |
 | **Module 3 — Entity & Evidence** (`module3/`) | 8001 | Python 3.11, FastAPI, SQLAlchemy, Alembic | Entity register, evidence items with source provenance, tenant-scoped |
 | **Frontend console** (`frontend/`) | 5173 | Vite, React 19, TypeScript (strict), Tailwind v4 | Unified analyst console across all three modules |
 
@@ -76,6 +82,7 @@ ff90d917/
 ├── docs/
 │   ├── API.md         API reference for all three modules + risk-scoring output
 │   ├── TESTING.md     Test/build report: exact commands and results
+│   ├── EVALUATION.md  Discovery evaluation: how to run, recorded live run, status categories
 │   ├── screenshots/    Captured UI walkthrough (14 pages)
 │   └── modules/module-2/  Module 2's full engineering doc set (15 files)
 └── README.md
@@ -199,6 +206,10 @@ All optional beyond the defaults shown; **none of the API keys below are committ
 | `TRUSTGRAPH_MODULE3_BASE_URL` | *(unset → MOCK adapter)* | Point at `http://localhost:8001` for the real Module 3 adapter. |
 | `TRUSTGRAPH_WORKER_MODE` | `in_process` | `in_process` (async jobs) or `sync` (deterministic, used by tests). |
 | `TRUSTGRAPH_TEXT_MODEL` / `TRUSTGRAPH_VISUAL_MODEL` / `TRUSTGRAPH_IDENTITY_MODEL` | `char_ngram_tfidf` / `phash_hamming` / `token_similarity` | ML model selection per factor family (deterministic baselines; see `docs/modules/module-2/ML_ARCHITECTURE.md`). |
+| `TRUSTGRAPH_DISCOVERY_CT_ENABLED` / `TRUSTGRAPH_DISCOVERY_CT_BASE_URL` | `true` / `https://crt.sh` | Certificate Transparency discovery via crt.sh (public, no credentials). |
+| `TRUSTGRAPH_DISCOVERY_CERTSPOTTER_ENABLED` / `TRUSTGRAPH_DISCOVERY_CERTSPOTTER_BASE_URL` | `true` / `https://api.certspotter.com` | Cert Spotter CT discovery (public anonymous tier; rate limits are reported honestly as `RATE_LIMITED`). |
+| `TRUSTGRAPH_DISCOVERY_SEARCH_ENABLED` / `TRUSTGRAPH_DISCOVERY_SEARCH_BASE_URL` / `TRUSTGRAPH_DISCOVERY_SEARCH_API_KEY` | `true` / Brave Search endpoint / *(unset)* | Web-search discovery. **Without an API key the provider reports `UNCONFIGURED` — it never fabricates results.** |
+| `TRUSTGRAPH_DISCOVERY_MAX_QUERIES_PER_PROVIDER` / `..._MAX_CANDIDATES_PER_PROVIDER` / `..._MAX_CANDIDATES_TOTAL` / `..._MAX_ANALYSIS_PER_JOB` | 3 / 25 / 40 / 10 | Discovery bounds: every request is capped and time-boxed. |
 | `TRUSTGRAPH_ENVIRONMENT`, `TRUSTGRAPH_LOG_LEVEL` | `development`, `INFO` | Runtime/logging. |
 
 **Module 3** (`module3/.env`, see `module3/.env.example`)
@@ -253,7 +264,8 @@ Everything below was executed end-to-end through the running UI before submissio
    each item to the factors it fed), a generated "Why this score" narrative, enrichment
    ("Scored for … against brand ShopVerse"), an explicit synthetic-data disclosure, and
    suggested next steps for the analyst. **Confirm threat** / **Dismiss** update the
-   register (status filters on `/threats`).
+   register (status filters on `/threats`). The page also lists **related threats**
+   linked by exact stored-attribute matches — never by name similarity.
 7. For a richer verdict, the seeded fixture **NovaPay Support (SYNTHETIC TEST_ONLY)**
    entity (4 evidence items: text, visual hash, domain intel, behavioral event) scores
    **36/100 MEDIUM, phishing, 71% confidence** against NovaPay — see
@@ -262,50 +274,102 @@ Everything below was executed end-to-end through the running UI before submissio
    then run the analysis flow again against it; the threat register mixes verdicts
    from every protected brand, and each brand's detail page lists its own scans and
    threats.
-9. **Console scan (Module 1)** — `/scans/new` runs a Sentinel scan from the console;
-   `/scans` lists history with type/level filters, and the scan detail page shows the
-   full report with risk-over-time. The Overview dashboard renders Module 1's
-   server-side stats (scan counts, avg risk/confidence, top signals).
-10. **Registry pages** — `/sources` (source registry + creation form) and
+9. **Automatic discovery** — open a brand (`/brands/{id}`) and click **Discover
+   Threats**: Module 2 derives bounded queries from the brand's DNA (name, official
+   domains, social handles — every query records its basis), queries its configured
+   discovery providers (public CT logs via Cert Spotter / crt.sh; web search when an
+   API key is set), normalizes and deduplicates observations, **excludes the brand's
+   official domains**, persists each retained candidate as traceable Module 3
+   evidence and chains it into the canonical engine. The job page shows per-provider
+   status/latency/candidate counts and honest `UNCONFIGURED`/`FAILED` reporting —
+   a provider outage is never masked as success. New candidates land in the threat
+   register for analyst review. Reproducible metrics:
+   [docs/EVALUATION.md](docs/EVALUATION.md).
+10. **Console scan (Module 1)** — `/scans/new` runs a Sentinel scan from the console;
+    `/scans` lists history with type/level filters, and the scan detail page shows the
+    full report with risk-over-time. The Overview dashboard renders Module 1's
+    server-side stats (scan counts, avg risk/confidence, top signals).
+11. **Registry pages** — `/sources` (source registry + creation form) and
     `/analysis/history` (job history with status filter and links to jobs/threats).
 
 ## Feature matrix
 
-**Implemented and verified**
+Categories follow the five honest buckets defined in
+[docs/EVALUATION.md](docs/EVALUATION.md): what was verified live, what automated
+tests prove, what needs credentials, what remains mocked-test-only, and what is
+deliberately not implemented.
+
+**Live-verified** (executed against running services and real provider APIs)
+- Automatic threat discovery against a real public provider: Cert Spotter
+  (anonymous CT-log search) answered HTTP 200 with real certificate records;
+  Brand-DNA-derived queries, normalization, deduplication and official-domain
+  exclusion all ran on those live observations. During the same evaluation
+  crt.sh was returning HTTP 502 (upstream outage) and web search was
+  unconfigured — the job honestly ended **PARTIAL** with per-provider detail,
+  never a fabricated success. Recorded output and reproduction:
+  [docs/EVALUATION.md](docs/EVALUATION.md).
+- The full three-service workflow on live services: brands → entities + evidence
+  → async analysis jobs → threat detail → analyst confirm/dismiss; console
+  scans; analysis history; discovery job pages.
+
+**Implemented and tested** (automated suites pass; external HTTP is mocked in tests)
 - Unified analyst console: Overview dashboard (live module health **plus Module 1
   server-side scan stats** — avg risk/confidence, top signals, recent scans), Brands
   (**create, edit and delete** non-demo brands with full Brand DNA forms; brand detail
-  with Module 2 derived-UUID mapping, brand-scoped scans and threats-against-brand),
-  Entities (register, **edit**, attach evidence with inline source creation,
-  **search + entity-type filter**), Sources (dedicated registry page with full creation
-  form), Scans (**new scan, scan list with type/level filters, scan detail with
-  risk-over-time** — the Sentinel scan experience in the console), Run analysis
-  (brand + entity pickers, evidence preview), live job status with polling/timeout/
-  recovery, **Analysis history** (job list, status filter, links to jobs and threats),
+  with Module 2 derived-UUID mapping, brand-scoped scans/threats and **one-click
+  Discover Threats**), Entities (register, **edit**, attach evidence with inline source
+  creation, **search + entity-type filter**), Sources (dedicated registry page with
+  full creation form), Scans (**new scan, scan list with type/level filters, scan
+  detail with risk-over-time**), Run analysis (brand + entity pickers, evidence
+  preview), live job status with polling/timeout/recovery, **Analysis history**,
   Threat register (search, status/risk filters, sort), Threat detail (factors,
-  provenance, confidence, explanation, next steps, confirm/dismiss), 404 page,
-  responsive nav **with mobile settings panel**, loading skeletons, empty states,
-  inline validation, recoverable error states, accessible contrast/labels/roles.
+  provenance, confidence, explanation, next steps, confirm/dismiss), discovery job
+  pages (per-provider coverage, queries with DNA basis, candidate provenance), 404
+  page, responsive nav **with mobile settings panel**, loading skeletons, empty
+  states, inline validation, recoverable error states, accessible
+  contrast/labels/roles.
+- Automatic discovery pipeline: provider abstraction (crt.sh + Cert Spotter + web
+  search), bounded Brand-DNA-derived queries with recorded provenance basis,
+  normalization + cross-provider deduplication, official-domain exclusion,
+  candidate caps and time-boxed requests, per-provider outcomes
+  (`COMPLETED`/`EMPTY`/`UNCONFIGURED`/`TIMEOUT`/`RATE_LIMITED`/`FAILED`), honest
+  job statuses (`PARTIAL`/`FAILED`), every retained candidate persisted as Module 3
+  evidence and chained into the canonical Module 2 engine.
+- Evidence-backed related threats: `GET /api/v1/threats/{id}/related` links
+  threats only by exact stored-attribute matches (shared identifiers /
+  infrastructure), never by name similarity; unsupported matches are not
+  presented as facts.
 - Async analysis jobs (202 + polling), idempotency keys, tenant isolation
   (`X-Tenant-ID`), evidence provenance end-to-end (source → evidence → factor →
   threat), observed vs inferred basis on every factor.
 - Deterministic risk engine: seven weighted factor families, 0–100 score, four risk
   levels, confidence scoring, classification, engine version stamping.
 - Brand DNA registry with derived-UUID bridge from Module 1 cuids.
-- Full test suites: frontend 65/65, Module 2 119/119 (113-test floor preserved),
-  Module 3 92/92, Module 1 typecheck + brand-input checks + engine self-check.
+- Full test suites: frontend 81/81, Module 2 148/148, Module 3 92/92, Module 1
+  typecheck + brand-input checks + engine self-check.
 
-**Partially implemented (honest scope)**
-- Relationship graph: factor families and relationship evidence are scored, but the
-  console has no graph visualization (no entity-relationship link data exists yet).
-- Module 1 `INTEL_MODE=live` (real RDAP/HTTP lookups) exists upstream but was run in
-  `demo` mode for this submission; the console reports the live mode on the Overview.
+**Implemented — requires credentials** (none committed; each degrades honestly)
+- `web_search` discovery provider (Brave Search API shape): set
+  `TRUSTGRAPH_DISCOVERY_SEARCH_API_KEY` to activate; without it the provider
+  reports `UNCONFIGURED` and is skipped.
+- Groq AI assessments in Module 1: `GROQ_API_KEY`; without it, deterministic
+  template explanations.
+- Module 1 `INTEL_MODE=live` (real RDAP/HTTP lookups).
+
+**Mocked-test-only** (stated plainly)
+- Candidate-rich discovery end-to-end (many lookalike candidates → evidence →
+  chained scoring → analyst review): proven by deterministic mocked-provider
+  tests (`SYNTHETIC TEST_ONLY` fixtures). Live runs currently yield zero
+  candidates for the demo brand: CT providers match only the brand's own domains
+  (no lookalike registrations in the queried window) and crt.sh was down at test
+  time; prefix-lookalike search needs the web-search API key above. No candidate
+  is ever invented to fill that gap.
 
 **Planned / out of scope for this deadline**
-- Live internet discovery connectors (no discovery results are invented — fixtures are
-  labelled `SYNTHETIC TEST_ONLY`), multi-tenant auth/UI, PostgreSQL deployment, LLM
-  explanations inside the risk engine (Module 1's Groq assessments cover the AI angle),
-  notification/webhook integrations.
+- Scheduled/recurring discovery (jobs are on-demand), notification/webhook
+  integrations, multi-tenant auth/UI, PostgreSQL deployment, LLM explanations
+  inside the risk engine, graph visualization (related-threat links are
+  deliberately evidence-backed list items, not a fabricated graph).
 
 ## Risk scoring, briefly
 
@@ -334,10 +398,10 @@ Run from each module's directory; full commands and captured output are in
 
 | Suite | Command | Result |
 |---|---|---|
-| Frontend unit tests | `npm run test` | **65/65 passed** (8 files: format, API client, brand bridge, threat table, sources, scans, history, console workflows) |
+| Frontend unit tests | `npm run test` | **81/81 passed** (incl. discovery-job and related-threats suites) |
 | Frontend types | `npm run typecheck` | clean (TS 5.9 strict) |
 | Frontend build | `npm run build` | ✓ (typecheck + production bundle) |
-| Module 2 risk engine | `python -m pytest` | **119/119 passed** (113-test floor preserved) |
+| Module 2 risk engine | `python -m pytest` | **148/148 passed** (incl. 20 discovery + 9 related-threat honesty tests) |
 | Module 3 evidence store | `python -m pytest` | **92/92 passed** |
 | Module 1 types | `npm run typecheck` | clean |
 | Module 1 brand API checks | `npm run test:brands` | all checks passed |
@@ -345,10 +409,15 @@ Run from each module's directory; full commands and captured output are in
 
 ## Known limitations
 
-- **Synthetic data only.** Modules run on clearly labelled `SYNTHETIC TEST_ONLY`
-  fixtures; no live internet discovery is performed or claimed. Module 1 intel mode is
-  `demo` and its AI provider is unconfigured (template explanations) unless a
-  `GROQ_API_KEY` is set.
+- **Live discovery scope (stated plainly).** Discovery queries only public, permitted
+  sources (Certificate Transparency logs; optional web search with a key). At
+  evaluation time (2026-10-10) crt.sh was returning HTTP 502 upstream; Cert Spotter
+  answered live, and its observations — the brand's own domains from certificate
+  records — were correctly excluded as official, so the live run yielded zero
+  candidates. The candidate-rich path is proven by `SYNTHETIC TEST_ONLY`
+  mocked-provider tests; no candidate is ever invented to fill the gap. Module 1
+  intel mode is `demo` and its AI provider is unconfigured (template explanations)
+  unless a `GROQ_API_KEY` is set.
 - **Evidence citation count.** A job result's `evidence_count` counts citations
   (an item counts once per factor family it fed), not distinct items — the UI labels
   this explicitly. Distinct-item counts appear on the threat/entity pages.
@@ -361,6 +430,9 @@ Run from each module's directory; full commands and captured output are in
 - [docs/API.md](docs/API.md) — every endpoint (Modules 1/2/3), request/response shapes,
   error semantics, and a field-by-field guide to the risk-scoring output.
 - [docs/TESTING.md](docs/TESTING.md) — exact test/build commands and captured results.
+- [docs/EVALUATION.md](docs/EVALUATION.md) — the reproducible discovery evaluation:
+  how to run it, metrics recorded, the recorded live run (a real provider success
+  alongside honest PARTIAL/FAILED reporting), and the capability status categories.
 - [docs/screenshots/](docs/screenshots/) — the 14-page UI walkthrough (overview,
   threats, threat detail, analysis, entities, brands, scans, sources, history, brand
   detail).
