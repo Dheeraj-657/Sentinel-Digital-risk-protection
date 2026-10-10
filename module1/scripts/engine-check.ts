@@ -1,0 +1,140 @@
+/**
+ * Runs every demo entity through the full pipeline (template explainer, no network)
+ * and asserts the expected risk bands. `npm run test:engine`
+ */
+import { analyzeEntity } from "../src/lib/engine/pipeline";
+import { fallbackAssessment } from "../src/lib/ai/fallback";
+import { groundAssessment } from "../src/lib/ai/grounding";
+import { normalizeBrand, normalizeEntity, EntityValidationError } from "../src/lib/engine/entity";
+import { DEMO_BRANDS, DEMO_ENTITIES } from "../src/lib/demo/dataset";
+import type { RiskLevel } from "../src/lib/engine/types";
+import { netGuardChecks } from "./net-guard-check";
+
+const EXPECT: Record<string, RiskLevel[]> = {
+  "Credential-phishing page": ["CRITICAL"],
+  "Homoglyph support domain": ["CRITICAL"],
+  "Fake support account": ["HIGH", "CRITICAL"],
+  "Crypto airdrop scam": ["CRITICAL"],
+  "Malicious clone app": ["HIGH", "CRITICAL"],
+  "Reward scam on free hosting": ["MEDIUM", "HIGH"],
+  "Giveaway page": ["MEDIUM", "HIGH"],
+  "Look-alike outlet store": ["MEDIUM", "HIGH"],
+  "Official domain (control)": ["VERY_LOW"],
+  "Official X account (control)": ["VERY_LOW"],
+  "Official app (control)": ["VERY_LOW"],
+  "Unknown domain, no brand": ["VERY_LOW", "LOW", "MEDIUM"],
+};
+
+let failures = 0;
+const verbose = process.argv.includes("-v");
+
+(async () => {
+  for (const d of DEMO_ENTITIES) {
+    const b = DEMO_BRANDS.find((x) => x.name === d.brand);
+    const report = await analyzeEntity({
+      entityType: d.entityType,
+      input: d.input,
+      brand: b ? normalizeBrand(b) : null,
+      explain: async (x) => fallbackAssessment(x, "test"),
+      mode: "demo",
+    });
+    const ok = EXPECT[d.label]?.includes(report.riskLevel);
+    if (!ok) failures++;
+    console.log(
+      `${ok ? "✔" : "✘"} ${d.label.padEnd(30)} ${String(report.riskScore).padStart(3)} ${report.riskLevel.padEnd(9)} conf ${String(report.confidenceScore).padStart(2)}  ` +
+        report.categories.filter((c) => c.points).map((c) => `${c.category}:${c.points}/${c.cap}`).join(" "),
+    );
+    if (verbose || !ok) {
+      for (const s of report.signals) console.log(`     ${s.id} ${String(s.impact).padStart(3)} [${s.category}] ${s.title} — ${s.evidence}`);
+      for (const a of report.scoreAdjustments) console.log(`     floor: ${a.reason}`);
+      console.log(`     actions: ${report.recommendedActions.map((a) => a.action).join(" | ")}`);
+    }
+  }
+
+  // Input validation
+  const bad: [string, string][] = [
+    ["DOMAIN", "localhost"], ["DOMAIN", "not a domain"], ["APP", "hello"], ["PROFILE", "https://example.com/x"],
+    // SSRF regressions: private / loopback / metadata IP literals in every spelling
+    ["WEBSITE", "http://127.0.0.1:8000/readyz"], ["DOMAIN", "169.254.169.254"], ["WEBSITE", "http://[::1]/"],
+    ["WEBSITE", "http://10.0.0.5/"], ["WEBSITE", "http://192.168.1.1/admin"], ["WEBSITE", "http://0x7f000001/"],
+    ["WEBSITE", "http://2130706433/"], ["WEBSITE", "http://[::ffff:127.0.0.1]/"], ["WEBSITE", "http://[::ffff:a9fe:a9fe]/"],
+    ["WEBSITE", "http://0.0.0.0/"], ["WEBSITE", "http://foo.localhost/"], ["DOMAIN", "metadata.google.internal"],
+  ];
+  for (const [t, i] of bad) {
+    try {
+      normalizeEntity(t as never, i);
+      console.log(`✘ validation accepted ${t} "${i}"`);
+      failures++;
+    } catch (e) {
+      console.log(`✔ rejects ${t} "${i}" — ${(e as EntityValidationError).message}`);
+    }
+  }
+
+  // Accepted inputs that look similar but are public
+  for (const [t, i] of [["WEBSITE", "http://8.8.8.8/"], ["DOMAIN", "example.com"]] as [string, string][]) {
+    try {
+      normalizeEntity(t as never, i);
+      console.log(`✔ accepts public ${t} "${i}"`);
+    } catch (e) {
+      failures++;
+      console.log(`✘ rejected public ${t} "${i}" — ${(e as Error).message}`);
+    }
+  }
+
+  failures += await netGuardChecks();
+
+  // Missing intelligence must never read as "safe" (regression: app absent from store data
+  // previously produced "Very Low … No meaningful risk indicators detected" + Monitor).
+  {
+    const nova = normalizeBrand(DEMO_BRANDS.find((x) => x.name === "NovaPay")!);
+    const rep = await analyzeEntity({ entityType: "APP", input: "com.novapay.wallet.rewards", brand: nova, explain: async (x) => fallbackAssessment(x, "t"), mode: "demo" });
+    const acts = rep.recommendedActions.map((a) => a.action);
+    const checks: [string, boolean][] = [
+      ["score itself unchanged by the gap logic", rep.riskLevel === "VERY_LOW" || rep.riskLevel === "LOW"],
+      ["recommends collecting missing intel", acts.includes("Collect missing intelligence before clearing")],
+      ["never says 'no meaningful risk indicators'", !rep.recommendedActions.some((a) => /No meaningful risk indicators detected/.test(a.rationale))],
+      ["explanation caveat names the missing primary source", rep.aiAssessment.caveats.some((c) => c.includes("App Store Intelligence") && c.includes("not a clean result"))],
+      ["summary says unverified, not safe", /unverified, not safe|missing evidence/.test(rep.aiAssessment.summary) || rep.aiAssessment.caveats.length > 0],
+    ];
+    const official = await analyzeEntity({ entityType: "DOMAIN", input: "novapay.com", brand: nova, explain: async (x) => fallbackAssessment(x, "t"), mode: "demo" });
+    checks.push(["official asset still cleared as official", official.recommendedActions[0]?.action.startsWith("No action needed")]);
+    const appIn = {
+      entity: rep.entity, brandName: "NovaPay", riskScore: rep.riskScore, riskLevel: rep.riskLevel, confidenceScore: rep.confidenceScore,
+      categories: rep.categories, adjustments: rep.scoreAdjustments, confidenceFactors: rep.confidenceFactors, signals: rep.signals,
+      actions: rep.recommendedActions, providerGaps: [], primaryGaps: ["App Store Intelligence (demo)"],
+    };
+    const sig = rep.signals.filter((x) => x.impact > 0).map((x) => x.id);
+    const safeClaim = groundAssessment({ summary: "This app appears legitimate.", keyFindings: [{ text: "Brand in package name.", signalIds: sig }] }, appIn, "m");
+    checks.push(["grounding rejects 'appears legitimate' when primary intel is missing", !safeClaim.ok]);
+    const honest = groundAssessment({ summary: "Package embeds the brand; store data was unavailable.", keyFindings: [{ text: "Brand in package name.", signalIds: sig }] }, appIn, "m");
+    checks.push(["grounding forces the missing-intel caveat", honest.ok && honest.value.caveats[0]?.includes("not a clean result")]);
+    for (const [name, pass] of checks) {
+      if (!pass) failures++;
+      console.log(`${pass ? "✔" : "✘"} missing-intel: ${name}`);
+    }
+  }
+
+  // Grounding guard
+  const b = normalizeBrand(DEMO_BRANDS[0]);
+  const r = await analyzeEntity({ entityType: "DOMAIN", input: "n0vapay-support.com", brand: b, explain: async (x) => fallbackAssessment(x, "t") });
+  const input = {
+    entity: r.entity, brandName: "NovaPay", riskScore: r.riskScore, riskLevel: r.riskLevel, confidenceScore: r.confidenceScore,
+    categories: r.categories, adjustments: r.scoreAdjustments, confidenceFactors: r.confidenceFactors, signals: r.signals,
+    actions: r.recommendedActions, providerGaps: [],
+  };
+  const cases: [string, unknown, boolean][] = [
+    ["grounded output accepted", { summary: "A homoglyph look-alike of NovaPay already listed by threat feeds.", keyFindings: [{ text: "Look-alike name plus feed listing.", signalIds: ["S1", "S2"] }], actionNotes: [], caveats: [] }, true],
+    ["invented number rejected", { summary: "Domain linked to 4,512 victims.", keyFindings: [{ text: "x evidence", signalIds: ["S1"] }] }, false],
+    ["wrong level rejected", { summary: "This is a low risk domain overall.", keyFindings: [{ text: "x evidence", signalIds: ["S1"] }] }, false],
+    ["uncited findings rejected", { summary: "Suspicious look-alike domain of NovaPay.", keyFindings: [{ text: "made up claim", signalIds: ["S99"] }] }, false],
+  ];
+  for (const [name, raw, expectOk] of cases) {
+    const g = groundAssessment(raw, input, "test-model");
+    const pass = g.ok === expectOk;
+    if (!pass) failures++;
+    console.log(`${pass ? "✔" : "✘"} grounding: ${name}${g.ok ? "" : ` (${g.reason})`}`);
+  }
+
+  console.log(failures ? `\n${failures} check(s) failed` : "\nAll engine checks passed");
+  process.exit(failures ? 1 : 0);
+})();
