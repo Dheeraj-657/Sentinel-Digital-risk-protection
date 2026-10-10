@@ -259,6 +259,38 @@ describe("DiscoveryJob page", () => {
     expect(analysisLink.getAttribute("href")).toBe("/analysis/job-9");
   });
 
+  it("links the brand to its Sentinel brand page, never to the derived uuid", async () => {
+    vi.mocked(m2.getDiscovery).mockResolvedValue(completedJob);
+    vi.mocked(m1.listBrands).mockResolvedValue({ items: [brand] });
+    vi.mocked(m3.listEntities).mockResolvedValue({
+      items: [] as M3EntityListItem[],
+      total: 0,
+      limit: 200,
+      offset: 0,
+    });
+    renderWithProviders(<DiscoveryJob />, ["/discovery/disc-1"]);
+
+    const backLink = await screen.findByRole("link", { name: "Back to brand" });
+    expect(backLink.getAttribute("href")).toBe("/brands/brand-1");
+    const brandLink = screen.getByRole("link", { name: "Acme" });
+    expect(brandLink.getAttribute("href")).toBe("/brands/brand-1");
+  });
+
+  it("keeps the brand reference as plain text when Sentinel does not resolve it", async () => {
+    vi.mocked(m2.getDiscovery).mockResolvedValue(completedJob);
+    vi.mocked(m1.listBrands).mockResolvedValue({ items: [] });
+    vi.mocked(m3.listEntities).mockResolvedValue({
+      items: [] as M3EntityListItem[],
+      total: 0,
+      limit: 200,
+      offset: 0,
+    });
+    renderWithProviders(<DiscoveryJob />, ["/discovery/disc-1"]);
+
+    await screen.findByText("Provider coverage");
+    expect(screen.queryByRole("link", { name: "Back to brand" })).toBeNull();
+  });
+
   it("polls until the job completes, then stops", async () => {
     vi.mocked(m2.getDiscovery)
       .mockResolvedValueOnce({ ...completedJob, status: "RUNNING", completed_at: null })

@@ -30,7 +30,7 @@ const TERMINAL = ["COMPLETED", "PARTIAL", "FAILED"];
 export function DiscoveryJob() {
   const { jobId = "" } = useParams();
   const { tenant } = useTenant();
-  const { brandName } = useEnrichment();
+  const { brand, brandName } = useEnrichment();
   const [job, setJob] = useState<DiscoveryJob | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [timedOut, setTimedOut] = useState(false);
@@ -74,6 +74,9 @@ export function DiscoveryJob() {
   }, [refresh]);
 
   const terminal = job !== null && TERMINAL.includes(job.status);
+  // job.brand_id is the risk-engine derived UUID; brand routes are keyed by the
+  // Sentinel cuid — resolve through the uuid bridge, never link the raw uuid.
+  const brandRecord = job !== null ? brand(job.brand_id) : undefined;
   const waiting = !terminal && !timedOut && !error;
 
   return (
@@ -82,8 +85,8 @@ export function DiscoveryJob() {
         title="Threat discovery run"
         description="Automatic candidate discovery from brand DNA: observable provider coverage, deduplicated candidates, and the evidence/analysis chain for every observation. Candidates are observations from public sources — not verdicts."
         actions={
-          job ? (
-            <Link to={`/brands/${job.brand_id}`}>
+          job && brandRecord ? (
+            <Link to={`/brands/${brandRecord.id}`}>
               <Button>Back to brand</Button>
             </Link>
           ) : undefined
@@ -153,9 +156,16 @@ export function DiscoveryJob() {
 
             <dl className="mt-5 grid grid-cols-2 gap-4 border-t border-line-soft pt-4 sm:grid-cols-4">
               <KeyValue label="Brand">
-                <Link to={`/brands/${job.brand_id}`} className="text-action hover:underline">
-                  {brandName(job.brand_id)}
-                </Link>
+                {brandRecord ? (
+                  <Link
+                    to={`/brands/${brandRecord.id}`}
+                    className="text-action hover:underline"
+                  >
+                    {brandName(job.brand_id)}
+                  </Link>
+                ) : (
+                  brandName(job.brand_id)
+                )}
               </KeyValue>
               <KeyValue label="Candidates" mono>
                 {job.candidates.length}
