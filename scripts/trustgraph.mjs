@@ -70,7 +70,8 @@ function setup() {
   for (const [example, target] of [["module1/.env.example", "module1/.env"], ["module3/.env.example", "module3/.env"], ["backend/.env.example", "backend/.env"]]) {
     if (existsSync(dir(example)) && !existsSync(dir(target))) {
       copyFileSync(dir(example), dir(target));
-      console.log(C.ok(`✔ created ${target} from ${example} (add GROQ_API_KEY there to enable AI explanations)`));
+      const hint = target.startsWith("module3") ? "" : " (add GROQ_API_KEY there to enable AI explanations)";
+      console.log(C.ok(`✔ created ${target} from ${example}${hint}`));
     }
   }
 
