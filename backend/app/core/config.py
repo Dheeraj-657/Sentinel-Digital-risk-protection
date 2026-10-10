@@ -44,6 +44,8 @@ class Settings(BaseSettings):
     # a missing API key is reported UNCONFIGURED, never papered over.
     discovery_ct_enabled: bool = True
     discovery_ct_base_url: str = "https://crt.sh"
+    discovery_certspotter_enabled: bool = True
+    discovery_certspotter_base_url: str = "https://api.certspotter.com"
     discovery_search_enabled: bool = True
     discovery_search_base_url: str = "https://api.search.brave.com/res/v1/web/search"
     discovery_search_api_key: str | None = None

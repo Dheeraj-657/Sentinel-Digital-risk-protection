@@ -20,6 +20,7 @@ from app.integrations.discovery.base import (
 from app.integrations.discovery.certificate_transparency import (
     CertificateTransparencyProvider,
 )
+from app.integrations.discovery.certspotter import CertSpotterProvider
 from app.integrations.discovery.mock import MockDiscoveryProvider
 from app.integrations.discovery.search_api import SearchApiProvider
 
@@ -30,6 +31,7 @@ __all__ = [
     "STATUS_RATE_LIMITED",
     "STATUS_TIMEOUT",
     "STATUS_UNCONFIGURED",
+    "CertSpotterProvider",
     "CertificateTransparencyProvider",
     "DiscoveryCandidate",
     "DiscoveryProviderError",

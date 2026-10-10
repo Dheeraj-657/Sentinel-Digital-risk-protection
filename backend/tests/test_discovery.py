@@ -16,7 +16,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from app.core.errors import EntityAlreadyExistsError
-from app.integrations.discovery.base import DiscoveryProviderError
+from app.integrations.discovery.base import DiscoveryProviderError, DiscoveryQuery
 from app.integrations.discovery.mock import MockDiscoveryProvider, synthetic_candidate
 from app.integrations.discovery.search_api import SearchApiProvider
 from app.main import create_app
@@ -563,3 +563,164 @@ class TestDiscoveryPipeline:
         assert listing["total"] == 2
         assert all(item["candidate_count"] == 1 for item in listing["items"])
         assert all(item["status"] == "COMPLETED" for item in listing["items"])
+
+
+# ---------------------------------------------------------------------------
+# Cert Spotter provider (second CT source, public/unauthenticated)
+# ---------------------------------------------------------------------------
+class TestCertSpotterProvider:
+    """SYNTHETIC TEST_ONLY fixtures; HTTP stubbed via monkeypatch."""
+
+    @staticmethod
+    def _provider():
+        from app.integrations.discovery.certspotter import CertSpotterProvider
+
+        return CertSpotterProvider("https://api.certspotter.test")
+
+    @staticmethod
+    def _respond(status_code=200, payload=None, json_error=False):
+        class StubResponse:
+            def __init__(self):
+                self.status_code = status_code
+
+            def json(self):
+                if json_error:
+                    raise ValueError("bad json")
+                return payload
+
+        return StubResponse()
+
+    def test_queries_for_derives_official_registrable_domains(self, brand_dna):
+        queries = self._provider().queries_for(brand_dna)
+        assert [(q.term, q.basis) for q in queries] == [
+            ("acme.com", "official_domain:acme.com")
+        ]
+
+    def test_parses_dns_names_registrable_normalized(self, monkeypatch):
+        import httpx
+
+        from app.integrations.discovery import certspotter as mod
+
+        payload = [
+            {
+                "id": "1",
+                "dns_names": ["*.Acme-Support.com", "portal.acme-support.com"],
+            },
+            {"id": "2", "dns_names": ["acme-support.com"]},
+            {"id": "3"},        # missing dns_names — skipped
+            "not-a-dict",       # non-dict entry — skipped
+        ]
+        captured = {}
+
+        def fake_get(url, params=None, timeout=None, headers=None):
+            captured["url"] = url
+            captured["params"] = params
+            return self._respond(payload=payload)
+
+        monkeypatch.setattr(mod.httpx, "get", fake_get)
+        names = self._provider()._query_names("acme-support.com")
+        # Cross-cert duplicates are collapsed later, in discover().
+        assert set(names) == {"acme-support.com"}
+        assert captured["url"] == "https://api.certspotter.test/v1/issuances"
+        assert captured["params"]["domain"] == "acme-support.com"
+        assert captured["params"]["include_subdomains"] == "true"
+        assert captured["params"]["expand"] == "dns_names"
+
+    def test_discover_builds_candidates_and_caps_results(self, monkeypatch):
+        from app.integrations.discovery import certspotter as mod
+
+        payload = [
+            {"id": "1", "dns_names": ["a.acme-support-secure.com"]},
+            {"id": "2", "dns_names": ["b.acme-support-secure.com"]},
+        ]
+        monkeypatch.setattr(
+            mod.httpx, "get",
+            lambda *a, **k: self._respond(payload=payload),
+        )
+        queries = [DiscoveryQuery(term="acme.com", basis="official_domain:acme.com")]
+        candidates = self._provider().discover(queries, max_results=1)
+        assert len(candidates) == 1
+        assert candidates[0].provider == "certspotter"
+        assert candidates[0].kind == "certificate"
+        assert candidates[0].domain == "acme-support-secure.com"
+        assert candidates[0].query_basis == "official_domain:acme.com"
+
+    def test_error_mapping(self, monkeypatch):
+        import httpx
+
+        from app.integrations.discovery import certspotter as mod
+
+        cases = [
+            (self._respond(status_code=429), "RATE_LIMITED"),
+            (self._respond(status_code=500), "FAILED"),
+            (self._respond(status_code=200, payload={}, json_error=True), "FAILED"),
+            (self._respond(status_code=200, payload={"nope": 1}), "FAILED"),
+        ]
+        for response, expected_status in cases:
+            monkeypatch.setattr(
+                mod.httpx, "get", lambda *a, **k: response
+            )
+            with pytest.raises(DiscoveryProviderError) as excinfo:
+                self._provider()._query_names("acme.com")
+            assert excinfo.value.status == expected_status
+
+        def raise_timeout(*a, **k):
+            raise httpx.TimeoutException("too slow")
+
+        monkeypatch.setattr(mod.httpx, "get", raise_timeout)
+        with pytest.raises(DiscoveryProviderError) as excinfo:
+            self._provider()._query_names("acme.com")
+        assert excinfo.value.status == "TIMEOUT"
+
+    def test_certspotter_success_with_failing_peer_is_partial(
+        self, client, tenant_id, brand_id
+    ):
+        """The exact live scenario observed 2026-10-10: certspotter up,
+        crt.sh returning 502, web search without credentials."""
+        client.discovery_providers.extend(
+            [
+                MockDiscoveryProvider(
+                    "certspotter",
+                    candidates=[
+                        synthetic_candidate(
+                            "certspotter",
+                            kind="certificate",
+                            domain="acme-support-secure.com",
+                            url="https://acme-support-secure.com/",
+                        )
+                    ],
+                ),
+                MockDiscoveryProvider(
+                    "certificate_transparency",
+                    error=DiscoveryProviderError(
+                        "FAILED", "crt.sh returned HTTP 502 for 'acme.com'"
+                    ),
+                ),
+                SearchApiProvider(api_key=None),
+            ]
+        )
+        response = client.post(
+            f"{api(client)}/discovery",
+            json={"brand_id": str(brand_id)},
+            headers=headers(tenant_id),
+        )
+        body = response.json()
+        assert response.status_code == 200
+        assert body["status"] == "PARTIAL"
+        outcomes = {o["provider"]: o for o in body["provider_outcomes"]}
+        assert outcomes["certspotter"]["status"] == "COMPLETED"
+        assert outcomes["certificate_transparency"]["status"] == "FAILED"
+        assert outcomes["certificate_transparency"]["error"] == (
+            "crt.sh returned HTTP 502 for 'acme.com'"
+        )
+        assert outcomes["web_search"]["status"] == "UNCONFIGURED"
+
+        # The provider that succeeded still contributes evidence that is
+        # traced and scored end-to-end.
+        assert len(body["candidates"]) == 1
+        candidate = body["candidates"][0]
+        assert "certspotter" in candidate["providers"]
+        assert candidate["entity_id"] and candidate["evidence_id"]
+        assert candidate["analysis_job_id"] is not None
+        evidence = client.module3.evidence[str(candidate["evidence_id"])]
+        assert evidence.metadata["discovery_job_id"] == body["job_id"]

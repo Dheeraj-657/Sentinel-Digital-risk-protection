@@ -26,6 +26,7 @@ from app.core.logging import configure_logging, get_correlation_id, get_logger, 
 from app.core.observability import metrics
 from app.events.publisher import LoggingEventPublisher
 from app.integrations.discovery import (
+    CertSpotterProvider,
     CertificateTransparencyProvider,
     SearchApiProvider,
 )
@@ -232,6 +233,13 @@ def create_app(settings: Settings | None = None, *, engine=None) -> FastAPI:
                 discovery_providers.append(
                     CertificateTransparencyProvider(
                         settings.discovery_ct_base_url,
+                        settings.integration_http_timeout_seconds,
+                    )
+                )
+            if settings.discovery_certspotter_enabled:
+                discovery_providers.append(
+                    CertSpotterProvider(
+                        settings.discovery_certspotter_base_url,
                         settings.integration_http_timeout_seconds,
                     )
                 )
