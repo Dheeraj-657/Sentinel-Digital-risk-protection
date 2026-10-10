@@ -503,6 +503,7 @@ Run from each module's directory; full commands and captured output are in
 
 ## Documentation index
 
+- [docs/TEST_ACCESS.md](docs/TEST_ACCESS.md) — test access (URLs, tenant, demo data, inputs with expected results) and evaluation notes.
 - [docs/INTEGRATION.md](docs/INTEGRATION.md) — integration, debugging & hardening report: every defect found and fixed, files changed, E2E 1–7 results, problem-statement coverage.
 - [docs/MODULE4.md](docs/MODULE4.md) — Module 4 report: features, backend boundary, tests, workflow verification, real vs mock.
 - [docs/API.md](docs/API.md) — every endpoint (Modules 1/2/3), request/response shapes,
