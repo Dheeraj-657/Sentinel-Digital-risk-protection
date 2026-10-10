@@ -12,6 +12,7 @@ class ErrorCode(str, Enum):
     INSUFFICIENT_EVIDENCE = "INSUFFICIENT_EVIDENCE"
     ANALYSIS_TIMEOUT = "ANALYSIS_TIMEOUT"
     DUPLICATE_JOB = "DUPLICATE_JOB"
+    DUPLICATE_ENTITY = "DUPLICATE_ENTITY"
     INTEGRATION_UNAVAILABLE = "INTEGRATION_UNAVAILABLE"
     NOT_FOUND = "NOT_FOUND"
     VALIDATION_ERROR = "VALIDATION_ERROR"
@@ -102,6 +103,19 @@ class DuplicateJobError(AppError):
             http_status=409,
             details={"idempotency_key": idempotency_key},
         )
+
+
+class EntityAlreadyExistsError(AppError):
+    """Module 3 already holds an entity with this natural key for the tenant."""
+
+    def __init__(self, existing_entity_id: str) -> None:
+        super().__init__(
+            ErrorCode.DUPLICATE_ENTITY,
+            f"Entity already exists: '{existing_entity_id}'.",
+            http_status=409,
+            details={"existing_entity_id": existing_entity_id},
+        )
+        self.existing_entity_id = existing_entity_id
 
 
 class IntegrationUnavailableError(AppError):

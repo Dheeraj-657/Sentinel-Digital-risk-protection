@@ -58,6 +58,25 @@ def executor_factory(
     return _build
 
 
+def execute_inline(
+    factory: Callable[[Session], AnalysisExecutor],
+    session_factory: sessionmaker,
+    job_id: uuid.UUID,
+    correlation_id: str | None = None,
+) -> None:
+    """Run one job synchronously on the calling thread. Used by SyncJobQueue
+    and by the discovery pipeline to chain analysis jobs without deadlocking
+    on the event loop it may already be running on."""
+    if correlation_id:
+        set_correlation_id(correlation_id)
+    with session_factory() as session:
+        executor = factory(session)
+        # Executor only flushes; the caller owns the transaction boundary.
+        # (On failure the executor commits FAILED state itself.)
+        executor.execute(job_id)
+        session.commit()
+
+
 class SyncJobQueue:
     """Executes jobs immediately on enqueue (worker_mode=sync)."""
 
@@ -67,14 +86,7 @@ class SyncJobQueue:
         self._session_factory = session_factory
 
     async def enqueue(self, job_id: uuid.UUID, correlation_id: str | None = None) -> None:
-        if correlation_id:
-            set_correlation_id(correlation_id)
-        with self._session_factory() as session:
-            executor = self._factory(session)
-            executor.execute(job_id)
-            # Executor only flushes; the queue owns the transaction boundary.
-            # (On failure the executor commits FAILED state itself.)
-            session.commit()
+        execute_inline(self._factory, self._session_factory, job_id, correlation_id)
 
     async def start(self) -> None: ...
     async def stop(self) -> None: ...

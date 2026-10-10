@@ -18,23 +18,31 @@ from sqlalchemy import create_engine, text
 from sqlalchemy.orm import sessionmaker
 
 from app.api.v1 import analysis as analysis_router
+from app.api.v1 import discovery as discovery_router
 from app.api.v1 import threats as threats_router
 from app.core.config import Settings
 from app.core.errors import AppError, ErrorCode
 from app.core.logging import configure_logging, get_correlation_id, get_logger, new_correlation_id, set_correlation_id, set_request_id
 from app.core.observability import metrics
 from app.events.publisher import LoggingEventPublisher
+from app.integrations.discovery import (
+    CertificateTransparencyProvider,
+    SearchApiProvider,
+)
 from app.integrations.module1.mock import MockBrandDNAClient
 from app.integrations.module1.sentinel import SentinelBrandClient
 from app.integrations.module3.mock import MockEntityProvider, MockEvidenceProvider
 from app.integrations.module3.providers import HTTPModule3Client
+from app.integrations.module3.writer import Module3Writer
 from app.ml.registry import build_model_set
 from app.risk.config import DEFAULT_RISK_ENGINE_CONFIG
 from app.schemas.common import HealthResponse
+from app.services.discovery import discovery_executor_factory
 from app.services.evidence import EvidenceService
 from app.services.queue import (
     InProcessJobQueue,
     SyncJobQueue,
+    execute_inline,
     executor_factory,
 )
 from app.services.risk_service import RiskService
@@ -203,6 +211,7 @@ def create_app(settings: Settings | None = None, *, engine=None) -> FastAPI:
             evidence_service=app.state.evidence_service,
             publisher=app.state.publisher,
         )
+        app.state.analysis_executor_factory = factory
         if settings.worker_mode.value == "sync":
             app.state.queue = SyncJobQueue(factory, app.state.session_factory)
         else:
@@ -210,17 +219,85 @@ def create_app(settings: Settings | None = None, *, engine=None) -> FastAPI:
                 factory, app.state.session_factory, settings.worker_concurrency
             )
         await app.state.queue.start()
+
+        # Discovery (P1). Requires real Module 3 to persist traceable
+        # evidence — without module3_base_url discovery stays disabled and
+        # jobs fail honestly rather than pretending.
+        if settings.module3_base_url:
+            module3_writer = Module3Writer(
+                settings.module3_base_url, settings.integration_http_timeout_seconds
+            )
+            discovery_providers: list = []
+            if settings.discovery_ct_enabled:
+                discovery_providers.append(
+                    CertificateTransparencyProvider(
+                        settings.discovery_ct_base_url,
+                        settings.integration_http_timeout_seconds,
+                    )
+                )
+            if settings.discovery_search_enabled:
+                discovery_providers.append(
+                    SearchApiProvider(
+                        settings.discovery_search_api_key,
+                        settings.discovery_search_base_url,
+                        settings.integration_http_timeout_seconds,
+                    )
+                )
+        else:
+            module3_writer = None
+            discovery_providers = []
+            logger.warning(
+                "discovery_disabled",
+                extra={"context": {"reason": "module3_base_url not configured"}},
+            )
+
+        if settings.worker_mode.value == "sync":
+            # Discovery runs on the loop thread in sync mode; chained
+            # analysis must execute inline (never schedule on this loop).
+            def analysis_enqueuer(job_id):
+                execute_inline(factory, app.state.session_factory, job_id)
+
+        else:
+            analysis_queue = app.state.queue
+            loop = app.state.loop
+
+            def analysis_enqueuer(job_id):
+                asyncio.run_coroutine_threadsafe(
+                    analysis_queue.enqueue(job_id), loop
+                ).result(timeout=120)
+
+        discovery_factory = discovery_executor_factory(
+            brand_client=app.state.brand_client,
+            module3_writer=module3_writer,
+            providers=discovery_providers,
+            evidence_provider=app.state.evidence_provider,
+            settings=settings,
+            analysis_enqueuer=analysis_enqueuer,
+        )
+        if settings.worker_mode.value == "sync":
+            app.state.discovery_queue = SyncJobQueue(
+                discovery_factory, app.state.session_factory
+            )
+        else:
+            # One discovery worker — providers are bounded and must not
+            # hammer upstreams.
+            app.state.discovery_queue = InProcessJobQueue(
+                discovery_factory, app.state.session_factory, concurrency=1
+            )
+        await app.state.discovery_queue.start()
         logger.info(
             "application_started",
             extra={"context": {
                 "worker_mode": settings.worker_mode.value,
                 "mock_integrations": settings.using_mock_integrations,
                 "models": app.state.models.version_string,
+                "discovery_providers": [p.name for p in discovery_providers],
             }},
         )
         try:
             yield
         finally:
+            await app.state.discovery_queue.stop()
             await app.state.queue.stop()
             db_engine.dispose()
             logger.info("application_stopped")
@@ -252,6 +329,7 @@ def create_app(settings: Settings | None = None, *, engine=None) -> FastAPI:
     _register_exception_handlers(app)
 
     app.include_router(analysis_router.router, prefix=settings.api_v1_prefix)
+    app.include_router(discovery_router.router, prefix=settings.api_v1_prefix)
     app.include_router(threats_router.router, prefix=settings.api_v1_prefix)
 
     @app.get("/healthz", response_model=HealthResponse)

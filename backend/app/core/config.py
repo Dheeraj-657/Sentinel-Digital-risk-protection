@@ -40,6 +40,18 @@ class Settings(BaseSettings):
     worker_mode: WorkerMode = WorkerMode.IN_PROCESS
     worker_concurrency: int = 2
 
+    # Automatic threat discovery (P1). Providers are bounded and honest:
+    # a missing API key is reported UNCONFIGURED, never papered over.
+    discovery_ct_enabled: bool = True
+    discovery_ct_base_url: str = "https://crt.sh"
+    discovery_search_enabled: bool = True
+    discovery_search_base_url: str = "https://api.search.brave.com/res/v1/web/search"
+    discovery_search_api_key: str | None = None
+    discovery_max_queries_per_provider: int = 3
+    discovery_max_candidates_per_provider: int = 25
+    discovery_max_candidates_total: int = 40
+    discovery_max_analysis_per_job: int = 10
+
     idempotency_retention_hours: int = 24
 
     # ML model selection (registry keys, see app/ml/registry.py)

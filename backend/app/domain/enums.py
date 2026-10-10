@@ -18,6 +18,22 @@ class JobStatus(str, Enum):
     CANCELLED = "CANCELLED"
 
 
+class DiscoveryJobStatus(str, Enum):
+    """Lifecycle of a brand discovery job.
+
+    COMPLETED — every queried provider returned a verdict (including EMPTY).
+    PARTIAL   — at least one provider succeeded and at least one failed.
+    FAILED    — every provider failed, or the job failed outright (e.g. the
+                brand DNA was unavailable).
+    """
+
+    QUEUED = "QUEUED"
+    RUNNING = "RUNNING"
+    COMPLETED = "COMPLETED"
+    PARTIAL = "PARTIAL"
+    FAILED = "FAILED"
+
+
 class FactorType(str, Enum):
     IDENTITY_SIMILARITY = "IDENTITY_SIMILARITY"
     TEXT_SIMILARITY = "TEXT_SIMILARITY"
