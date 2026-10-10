@@ -15,11 +15,13 @@ from app.events.schemas import ThreatStatusChangedEvent, build_metadata
 from app.models.analysis import AnalysisResult
 from app.models.threat import Threat
 from app.schemas.threat import (
+    RelatedThreatsResponse,
     ThreatListResponse,
     ThreatResponse,
     ThreatStatusUpdateRequest,
     ThreatSummary,
 )
+from app.services.relations import RelatedThreatService
 from app.services.threat_service import ThreatService
 
 router = APIRouter(prefix="/threats", tags=["threats"])
@@ -105,6 +107,31 @@ def get_threat(
             details={"threat_id": str(threat_id)},
         )
     return _serialize_threat(db, threat)
+
+
+@router.get("/{threat_id}/related", response_model=RelatedThreatsResponse)
+def get_related_threats(
+    threat_id: uuid.UUID,
+    request: Request,
+    db: Session = Depends(get_db),
+    tenant_id: uuid.UUID = Depends(get_tenant),
+) -> RelatedThreatsResponse:
+    """Threats related by an exact stored-attribute match — never by name
+    similarity. See RelatedThreatService for the honesty policy."""
+    service = RelatedThreatService(
+        db, request.app.state.entity_provider, request.app.state.evidence_provider
+    )
+    threat, relations, warnings = service.find_related(tenant_id, threat_id)
+    if threat is None:
+        raise AppError(
+            ErrorCode.NOT_FOUND,
+            f"Threat '{threat_id}' was not found.",
+            http_status=404,
+            details={"threat_id": str(threat_id)},
+        )
+    return RelatedThreatsResponse(
+        threat_id=threat.id, items=relations, total=len(relations), warnings=warnings
+    )
 
 
 @router.patch("/{threat_id}/status", response_model=ThreatResponse)

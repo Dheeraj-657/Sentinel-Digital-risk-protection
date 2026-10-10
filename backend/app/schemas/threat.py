@@ -102,3 +102,39 @@ class ThreatStatusUpdateRequest(BaseModel):
     """Module 4 analyst workflow: CONFIRMED / DISMISSED lifecycle changes."""
 
     status: ThreatStatus = Field(description="New lifecycle status (OPEN, CONFIRMED, DISMISSED)")
+
+
+class SharedAttribute(BaseModel):
+    """A stored entity attribute two threats share by exact value."""
+
+    key: str = Field(description="Identifier key on both entities (e.g. 'domain', 'handle')")
+    value: str = Field(description="The exact shared value — no normalization or similarity")
+
+
+class RelatedThreatItem(BaseModel):
+    """One other threat related by an exact stored-attribute match.
+
+    basis is always EXACT_ATTRIBUTE_MATCH: relationships are asserted only
+    when both entities store the identical key/value pair. Evidence IDs link
+    observations that correspond to the shared value — correspondence is a
+    provenance filter, not proof of malice.
+    """
+
+    threat_id: uuid.UUID
+    entity_id: uuid.UUID
+    entity_display_name: str | None
+    relation_type: str = Field(description="SHARED_DOMAIN or SHARED_IDENTIFIER")
+    basis: str = "EXACT_ATTRIBUTE_MATCH"
+    shared_attribute: SharedAttribute
+    evidence_ids: list[uuid.UUID] = Field(default_factory=list)
+    target_evidence_ids: list[uuid.UUID] = Field(default_factory=list)
+
+
+class RelatedThreatsResponse(BaseModel):
+    threat_id: uuid.UUID
+    items: list[RelatedThreatItem]
+    total: int
+    warnings: list[str] = Field(
+        default_factory=list,
+        description="Non-fatal notes (e.g. an entity that could not be resolved) — never silent skips.",
+    )
