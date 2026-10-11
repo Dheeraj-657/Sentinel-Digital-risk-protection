@@ -54,6 +54,13 @@ describe("production routing (frontend/vercel.json)", () => {
     expect(prodModule(path)).toBe(local);
   });
 
+  it.each(clientPaths)("%s never relies on an empty :path* wildcard (avoids a trailing-slash redirect)", (path) => {
+    // Regression: on Vercel "/api/brands" matched "/api/brands/:path*" and was proxied as
+    // "/api/brands/", which Next.js redirects — the live dashboard then failed to load.
+    const rule = vercel.rewrites.find((r) => matches(r.source, path))!;
+    if (rule.source.endsWith("/:path*")) expect(path).not.toBe(rule.source.slice(0, -"/:path*".length));
+  });
+
   it("routes Module 3 paths before Module 2's /api/v1 catch-all", () => {
     expect(prodModule("/api/v1/entities/x/evidence")).toBe("M3");
     expect(prodModule("/api/v1/sources")).toBe("M3");
