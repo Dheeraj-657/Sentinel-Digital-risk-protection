@@ -4,18 +4,20 @@
   "buildCommand": "npm run build",
   "outputDirectory": "dist",
   "rewrites": [
-    { "source": "/api/brands/:path*", "destination": "https://trustgraph-module1.onrender.com/api/brands/:path*" },
-    { "source": "/api/health", "destination": "https://trustgraph-module1.onrender.com/api/health" },
-    { "source": "/api/scans/:path*", "destination": "https://trustgraph-module1.onrender.com/api/scans/:path*" },
-    { "source": "/api/stats", "destination": "https://trustgraph-module1.onrender.com/api/stats" },
-
-    { "source": "/api/v1/entities/:path*", "destination": "https://trustgraph-module3.onrender.com/api/v1/entities/:path*" },
-    { "source": "/api/v1/sources/:path*", "destination": "https://trustgraph-module3.onrender.com/api/v1/sources/:path*" },
-    { "source": "/healthz", "destination": "https://trustgraph-module3.onrender.com/healthz" },
-
-    { "source": "/api/v1/:path*", "destination": "https://trustgraph-module2.onrender.com/api/v1/:path*" },
-    { "source": "/readyz", "destination": "https://trustgraph-module2.onrender.com/readyz" },
-
-    { "source": "/(.*)", "destination": "/index.html" }
+    {"source": "/api/brands", "destination": "https://trustgraph-module1.onrender.com/api/brands"},
+    {"source": "/api/brands/:path*", "destination": "https://trustgraph-module1.onrender.com/api/brands/:path*"},
+    {"source": "/api/health", "destination": "https://trustgraph-module1.onrender.com/api/health"},
+    {"source": "/api/scans", "destination": "https://trustgraph-module1.onrender.com/api/scans"},
+    {"source": "/api/scans/:path*", "destination": "https://trustgraph-module1.onrender.com/api/scans/:path*"},
+    {"source": "/api/stats", "destination": "https://trustgraph-module1.onrender.com/api/stats"},
+    {"source": "/api/v1/entities", "destination": "https://trustgraph-module3.onrender.com/api/v1/entities"},
+    {"source": "/api/v1/entities/:path*", "destination": "https://trustgraph-module3.onrender.com/api/v1/entities/:path*"},
+    {"source": "/api/v1/sources", "destination": "https://trustgraph-module3.onrender.com/api/v1/sources"},
+    {"source": "/api/v1/sources/:path*", "destination": "https://trustgraph-module3.onrender.com/api/v1/sources/:path*"},
+    {"source": "/healthz", "destination": "https://trustgraph-module3.onrender.com/healthz"},
+    {"source": "/api/v1", "destination": "https://trustgraph-module2.onrender.com/api/v1"},
+    {"source": "/api/v1/:path*", "destination": "https://trustgraph-module2.onrender.com/api/v1/:path*"},
+    {"source": "/readyz", "destination": "https://trustgraph-module2.onrender.com/readyz"},
+    {"source": "/(.*)", "destination": "/index.html"}
   ]
 }
