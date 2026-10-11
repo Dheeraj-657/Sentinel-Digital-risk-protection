@@ -289,6 +289,30 @@ class TestOpsEndpoints:
         assert response.status_code == 200
         assert response.json() == {"status": "ready", "checks": {"database": "ok"}}
 
+    def test_readyz_refuses_mock_integrations_in_production(self, engine):
+        from app.core.config import Settings
+        from app.main import create_app
+
+        for m1, m3 in [(None, None), ("", "http://m3.internal.test"), ("http://m1.internal.test", "  ")]:
+            prod = Settings(worker_mode="sync", environment="production", module1_base_url=m1,
+                            module3_base_url=m3, _env_file=None)
+            assert prod.using_mock_integrations
+            with TestClient(create_app(prod, engine=engine)) as c:
+                response = c.get("/readyz")
+            assert response.status_code == 503, (m1, m3)
+            assert response.json()["checks"] == {"database": "ok", "integrations": "not_configured"}
+
+    def test_readyz_ready_in_production_with_integrations(self, engine):
+        from app.core.config import Settings
+        from app.main import create_app
+
+        prod = Settings(worker_mode="sync", environment="production", module1_base_url="http://m1.internal.test",
+                        module3_base_url="http://m3.internal.test", _env_file=None)
+        with TestClient(create_app(prod, engine=engine)) as c:
+            response = c.get("/readyz")
+        assert response.status_code == 200
+        assert response.json() == {"status": "ready", "checks": {"database": "ok"}}
+
     def test_metrics_endpoint_exposes_request_counters(self, client):
         client.get("/healthz")
         response = client.get("/metrics")

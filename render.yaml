@@ -102,13 +102,15 @@ services:
         value: phash_hamming
       - key: TRUSTGRAPH_IDENTITY_MODEL
         value: token_similarity
-      # Public https URLs of the two services above (no trailing slash), e.g. the
-      # "https://<service>.onrender.com" address Render shows on each service page.
-      # If either is empty, Module 2 silently falls back to its MOCK adapters.
+      # Public URLs of the two services above (Render's default address for each
+      # service name; no trailing slash). If Render shows a different URL on a
+      # service page (name already taken), change it here AND in frontend/vercel.json.
+      # With TRUSTGRAPH_ENVIRONMENT=production, /readyz returns 503 if either is
+      # blank, so the deploy fails instead of silently using MOCK adapters.
       - key: TRUSTGRAPH_MODULE1_BASE_URL
-        sync: false
+        value: https://trustgraph-module1.onrender.com
       - key: TRUSTGRAPH_MODULE3_BASE_URL
-        sync: false
+        value: https://trustgraph-module3.onrender.com
       # AI Security Analyst (Module 4) — same variable names as Module 1.
       - key: GROQ_MODEL
         value: openai/gpt-oss-120b

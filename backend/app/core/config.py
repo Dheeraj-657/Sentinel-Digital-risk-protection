@@ -65,7 +65,9 @@ class Settings(BaseSettings):
 
     @property
     def using_mock_integrations(self) -> bool:
-        return self.module1_base_url is None or self.module3_base_url is None
+        # Blank values (e.g. an unset deployment secret) also mean "no adapter":
+        # create_app() falls back to MOCK on any falsy URL, so report it as such.
+        return not (self.module1_base_url or "").strip() or not (self.module3_base_url or "").strip()
 
 
 def get_settings() -> Settings:

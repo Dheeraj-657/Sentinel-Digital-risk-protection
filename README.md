@@ -136,6 +136,15 @@ clearly labelled template answers.
 
 ---
 
+## Public deployment (Vercel + Render)
+
+The console stays on Vercel; Modules 1, 2 (+ AI analyst) and 3 run on Render from the
+root `render.yaml` Blueprint, and `frontend/vercel.json` routes the console's API paths to
+them. Step-by-step setup, environment variables and verification:
+[docs/DEPLOYMENT.md](docs/DEPLOYMENT.md).
+
+---
+
 ## Manual start, one service per terminal (alternative)
 
 Run each block in a **separate PowerShell window**. Startup order matters only for
@@ -503,6 +512,7 @@ Run from each module's directory; full commands and captured output are in
 
 ## Documentation index
 
+- [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md) — Vercel + Render deployment: service map, environment variables, steps, verification, troubleshooting.
 - [docs/TEST_ACCESS.md](docs/TEST_ACCESS.md) — test access (URLs, tenant, demo data, inputs with expected results) and evaluation notes.
 - [docs/INTEGRATION.md](docs/INTEGRATION.md) — integration, debugging & hardening report: every defect found and fixed, files changed, E2E 1–7 results, problem-statement coverage.
 - [docs/MODULE4.md](docs/MODULE4.md) — Module 4 report: features, backend boundary, tests, workflow verification, real vs mock.

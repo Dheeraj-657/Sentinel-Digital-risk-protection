@@ -357,6 +357,11 @@ def create_app(settings: Settings | None = None, *, engine=None) -> FastAPI:
             logger.warning("readiness_check_failed", extra={"context": {"check": "database"}})
             checks["database"] = "unavailable"
             return JSONResponse(status_code=503, content={"status": "unready", "checks": checks})
+        if settings.environment.strip().lower() == "production" and settings.using_mock_integrations:
+            # In production, MOCK brand/entity adapters would serve demo data as if it
+            # were real; refuse readiness so the deployment health check fails loudly.
+            checks["integrations"] = "not_configured"
+            return JSONResponse(status_code=503, content={"status": "unready", "checks": checks})
         return {"status": "ready", "checks": checks}
 
     @app.get("/metrics", response_class=PlainTextResponse)
