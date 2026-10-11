@@ -1,0 +1,21 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "framework": "vite",
+  "buildCommand": "npm run build",
+  "outputDirectory": "dist",
+  "rewrites": [
+    { "source": "/api/brands/:path*", "destination": "https://trustgraph-module1.onrender.com/api/brands/:path*" },
+    { "source": "/api/health", "destination": "https://trustgraph-module1.onrender.com/api/health" },
+    { "source": "/api/scans/:path*", "destination": "https://trustgraph-module1.onrender.com/api/scans/:path*" },
+    { "source": "/api/stats", "destination": "https://trustgraph-module1.onrender.com/api/stats" },
+
+    { "source": "/api/v1/entities/:path*", "destination": "https://trustgraph-module3.onrender.com/api/v1/entities/:path*" },
+    { "source": "/api/v1/sources/:path*", "destination": "https://trustgraph-module3.onrender.com/api/v1/sources/:path*" },
+    { "source": "/healthz", "destination": "https://trustgraph-module3.onrender.com/healthz" },
+
+    { "source": "/api/v1/:path*", "destination": "https://trustgraph-module2.onrender.com/api/v1/:path*" },
+    { "source": "/readyz", "destination": "https://trustgraph-module2.onrender.com/readyz" },
+
+    { "source": "/(.*)", "destination": "/index.html" }
+  ]
+}

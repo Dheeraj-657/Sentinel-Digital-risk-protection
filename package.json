@@ -1,0 +1,17 @@
+{
+  "name": "trustgraph",
+  "private": true,
+  "description": "TRUSTGRAPH — brand-impersonation threat intelligence platform (all four modules, one launcher).",
+  "type": "module",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "setup": "node scripts/trustgraph.mjs setup",
+    "dev": "node scripts/trustgraph.mjs dev",
+    "start": "node scripts/trustgraph.mjs dev",
+    "status": "node scripts/trustgraph.mjs status",
+    "test": "node scripts/trustgraph.mjs test",
+    "e2e": "node scripts/e2e-smoke.mjs"
+  }
+}
