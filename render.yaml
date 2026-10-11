@@ -1,19 +1,22 @@
-# TRUSTGRAPH — Render Blueprint
+# TRUSTGRAPH — Render Blueprint (FREE plan)
 #
 # Three independently deployable backends. The console (frontend/, Module 4 UI)
 # stays on Vercel; the Module 4 AI Security Analyst API is part of backend/
 # (router mounted in backend/app/main.py), so it has no service of its own.
 #
 #   Vercel console ──► trustgraph-module1  (module1/, Next.js 16 + Prisma 7 + SQLite)
-#                 ──► trustgraph-module2  (backend/, FastAPI risk engine + AI analyst, SQLite)
 #                 ──► trustgraph-module3  (module3/, FastAPI entity & evidence store, SQLite)
+#                 ──► trustgraph-module2  (backend/, FastAPI risk engine + AI analyst, SQLite)
 #   trustgraph-module2 ──► module1 (brand DNA via /api/brands) and module3 (entities/evidence)
 #
-# Every service stores SQLite on a persistent disk mounted at /var/data. Render disks
-# are not available during build, so schema setup (prisma db push / alembic upgrade
-# head) runs at the start of each boot; both are idempotent and non-destructive.
-# Disks require a paid instance type and pin each service to one instance, which
-# SQLite and Module 2's in-process job worker need anyway.
+# FREE PLAN LIMITS (by choice — no payment):
+#  - No persistent disks: each SQLite file lives on the service's temporary filesystem
+#    and is recreated empty whenever the service restarts, redeploys or wakes from sleep.
+#  - Services sleep after ~15 min without traffic; the first request then takes ~1 min.
+#  - To keep the demo usable after every wake-up, Module 1 reloads its labelled demo
+#    brands + sample scans and Module 3 reloads its labelled SYNTHETIC test entity at start.
+#    Anything users create (brands, analyses, verdicts) is temporary.
+# To make data permanent later: plan: starter + a `disk:` per service (see docs/DEPLOYMENT.md).
 
 services:
   # ---------------------------------------------------------------- Module 1
@@ -22,21 +25,18 @@ services:
     runtime: node
     rootDir: module1
     region: oregon
-    plan: starter
-    # postinstall runs `prisma generate`; devDependencies (prisma CLI) are kept
-    # because NODE_ENV is not forced to production at install time.
+    plan: free
+    # postinstall runs `prisma generate`; devDependencies (prisma CLI, tsx) stay
+    # installed because NODE_ENV is not forced to production at install time.
     buildCommand: npm ci && npm run build
-    startCommand: npx prisma db push && npm run start
+    # Fresh database each boot → create schema, load demo brands/sample scans, serve.
+    startCommand: npx prisma db push && npm run db:seed && npm run start
     healthCheckPath: /api/health
-    disk:
-      name: module1-data
-      mountPath: /var/data
-      sizeGB: 1
     envVars:
       - key: NODE_VERSION
         value: "22"
       - key: DATABASE_URL
-        value: file:/var/data/sentinel.db
+        value: file:./prisma/dev.db
       - key: INTEL_MODE
         value: demo
       - key: SCAN_RATE_LIMIT_PER_MINUTE
@@ -52,14 +52,12 @@ services:
     runtime: python
     rootDir: module3
     region: oregon
-    plan: starter
+    plan: free
     buildCommand: pip install --upgrade pip && pip install .
-    startCommand: alembic upgrade head && uvicorn module3.main:app --host 0.0.0.0 --port $PORT
+    # Fresh database each boot → migrate, load the labelled SYNTHETIC fixture
+    # (Acme Corp Support + 4 evidence items) for the demo tenant, serve.
+    startCommand: alembic upgrade head && python -m module3.seed 11111111-2222-3333-4444-555555555555 && uvicorn module3.main:app --host 0.0.0.0 --port $PORT
     healthCheckPath: /healthz
-    disk:
-      name: module3-data
-      mountPath: /var/data
-      sizeGB: 1
     envVars:
       - key: PYTHON_VERSION
         value: "3.13.5"
@@ -68,7 +66,7 @@ services:
       - key: TRUSTGRAPH_M3_LOG_LEVEL
         value: INFO
       - key: TRUSTGRAPH_M3_DATABASE_URL
-        value: sqlite:////var/data/module3.db
+        value: sqlite:///./module3.db
 
   # ------------------------------------------- Module 2 (+ Module 4 analyst API)
   - type: web
@@ -76,15 +74,11 @@ services:
     runtime: python
     rootDir: backend
     region: oregon
-    plan: starter
+    plan: free
     buildCommand: pip install --upgrade pip && pip install .
     # Single uvicorn worker: jobs run in-process (TRUSTGRAPH_WORKER_MODE=in_process).
     startCommand: alembic upgrade head && uvicorn app.main:app --host 0.0.0.0 --port $PORT
     healthCheckPath: /readyz
-    disk:
-      name: module2-data
-      mountPath: /var/data
-      sizeGB: 1
     envVars:
       - key: PYTHON_VERSION
         value: "3.13.5"
@@ -93,7 +87,7 @@ services:
       - key: TRUSTGRAPH_LOG_LEVEL
         value: INFO
       - key: TRUSTGRAPH_DATABASE_URL
-        value: sqlite:////var/data/trustgraph_module2.db
+        value: sqlite:///./trustgraph_module2.db
       - key: TRUSTGRAPH_WORKER_MODE
         value: in_process
       - key: TRUSTGRAPH_TEXT_MODEL
@@ -111,6 +105,9 @@ services:
         value: https://trustgraph-module1.onrender.com
       - key: TRUSTGRAPH_MODULE3_BASE_URL
         value: https://trustgraph-module3.onrender.com
+      # Free services sleep; give a sleeping Module 1/3 time to wake (default 10 s).
+      - key: TRUSTGRAPH_INTEGRATION_HTTP_TIMEOUT_SECONDS
+        value: "60"
       # AI Security Analyst (Module 4) — same variable names as Module 1.
       - key: GROQ_MODEL
         value: openai/gpt-oss-120b
